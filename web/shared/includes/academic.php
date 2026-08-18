@@ -9,7 +9,7 @@ if (!defined('APP_STARTED')) {
 
 /**
  * Academic timetable, module enrolment, lecture sessions, and eligibility.
- * Does not write attendance events or attendance records.
+ * Attendance IN/OUT recording lives in attendance.php.
  */
 
 /**
@@ -62,8 +62,17 @@ function app_now_datetime(): string
     return app_now()->format('Y-m-d H:i:s');
 }
 
+function set_app_now_override(?DateTimeImmutable $now): void
+{
+    $GLOBALS['smartams_app_now_override'] = $now;
+}
+
 function app_now(): DateTimeImmutable
 {
+    if (isset($GLOBALS['smartams_app_now_override']) && $GLOBALS['smartams_app_now_override'] instanceof DateTimeImmutable) {
+        return $GLOBALS['smartams_app_now_override'];
+    }
+
     return new DateTimeImmutable('now', new DateTimeZone(APP_TIMEZONE));
 }
 
@@ -94,17 +103,36 @@ function parse_app_datetime(?string $value): ?DateTimeImmutable
 
 function session_scheduled_datetime(array $session, string $bound): ?DateTimeImmutable
 {
-    $time = $bound === 'end'
-        ? (string) ($session['scheduled_end'] ?? '')
-        : (string) ($session['scheduled_start'] ?? '');
-    $date = (string) ($session['session_date'] ?? '');
+    $rawTime = $bound === 'end'
+        ? ($session['scheduled_end'] ?? '')
+        : ($session['scheduled_start'] ?? '');
+    $rawDate = $session['session_date'] ?? '';
+
+    if ($rawDate instanceof DateTimeInterface) {
+        $date = $rawDate->format('Y-m-d');
+    } else {
+        $date = trim((string) $rawDate);
+        if (preg_match('/^(\d{4}-\d{2}-\d{2})/', $date, $dateMatch) === 1) {
+            $date = $dateMatch[1];
+        }
+    }
+
+    if ($rawTime instanceof DateTimeInterface) {
+        $time = $rawTime->format('H:i:s');
+    } else {
+        $time = trim((string) $rawTime);
+        if (preg_match('/(\d{1,2}:\d{2}(?::\d{2}(?:\.\d+)?)?)/', $time, $timeMatch) === 1) {
+            $time = $timeMatch[1];
+        }
+    }
+
     $hm = normalize_time_hm($time);
     if (!validate_date_ymd($date) || !validate_time_hm($hm)) {
         return null;
     }
 
     $parsed = DateTimeImmutable::createFromFormat(
-        'Y-m-d H:i',
+        '!Y-m-d H:i',
         $date . ' ' . $hm,
         new DateTimeZone(APP_TIMEZONE)
     );
@@ -128,24 +156,31 @@ function session_scheduled_datetime(array $session, string $bound): ?DateTimeImm
  *
  * Auto-start still respects one IN_PROGRESS session per lecturer and per batch.
  *
+ * After status transitions, OPEN early-pending rows are promoted to official IN
+ * (inside at scheduled start) or CANCELLED (left before start / session never opened).
+ *
  * @return array{skipped?: bool, opened: int, closed: int, expired: int}
  */
 function sync_scheduled_session_states(bool $force = false): array
 {
-    static $alreadyRan = false;
-    if ($alreadyRan && !$force) {
+    static $succeeded = false;
+    if ($succeeded && !$force) {
         return ['skipped' => true, 'opened' => 0, 'closed' => 0, 'expired' => 0];
     }
-    $alreadyRan = true;
 
     $opened = 0;
     $closed = 0;
     $expired = 0;
+    $ownsTransaction = false;
+    $pdo = db();
 
     try {
         $now = app_now();
-        $pdo = db();
-        $pdo->beginTransaction();
+        $ownsTransaction = !$pdo->inTransaction();
+        if ($ownsTransaction) {
+            $pdo->beginTransaction();
+        }
+
         $statement = $pdo->query(
             "SELECT session_id, lecturer_id, batch_id, status, session_date,
                     scheduled_start, scheduled_end, actual_start, actual_end
@@ -154,19 +189,8 @@ function sync_scheduled_session_states(bool $force = false): array
              FOR UPDATE"
         );
         $rows = $statement === false ? [] : $statement->fetchAll();
-
-        $busyLecturers = [];
-        $busyBatches = [];
-        foreach ($rows as $row) {
-            if ($row['status'] !== 'IN_PROGRESS') {
-                continue;
-            }
-            $end = session_scheduled_datetime($row, 'end');
-            if ($end instanceof DateTimeImmutable && $now >= $end) {
-                continue;
-            }
-            $busyLecturers[(int) $row['lecturer_id']] = true;
-            $busyBatches[(int) $row['batch_id']] = true;
+        if ($statement instanceof PDOStatement) {
+            $statement->closeCursor();
         }
 
         foreach ($rows as $row) {
@@ -176,6 +200,10 @@ function sync_scheduled_session_states(bool $force = false): array
             $end = session_scheduled_datetime($row, 'end');
             if (!$end instanceof DateTimeImmutable || $now < $end) {
                 continue;
+            }
+            $start = session_scheduled_datetime($row, 'start');
+            if ($start instanceof DateTimeImmutable) {
+                promote_open_early_pending_for_session($pdo, (int) $row['session_id'], $start);
             }
             $complete = $pdo->prepare(
                 "UPDATE lecture_sessions
@@ -197,6 +225,7 @@ function sync_scheduled_session_states(bool $force = false): array
             if (!$end instanceof DateTimeImmutable || $now < $end) {
                 continue;
             }
+            cancel_open_early_pending_for_session($pdo, (int) $row['session_id']);
             $expire = $pdo->prepare(
                 "UPDATE lecture_sessions
                  SET status = 'COMPLETED', actual_end = :actual_end
@@ -209,6 +238,27 @@ function sync_scheduled_session_states(bool $force = false): array
             $expired += $expire->rowCount();
         }
 
+        $busyLecturers = [];
+        $busyBatches = [];
+        $busyRows = $pdo->query(
+            "SELECT session_id, lecturer_id, batch_id, session_date, scheduled_start, scheduled_end
+             FROM lecture_sessions
+             WHERE status = 'IN_PROGRESS'
+             FOR UPDATE"
+        );
+        $busyList = $busyRows === false ? [] : $busyRows->fetchAll();
+        if ($busyRows instanceof PDOStatement) {
+            $busyRows->closeCursor();
+        }
+        foreach ($busyList as $busy) {
+            $end = session_scheduled_datetime($busy, 'end');
+            if ($end instanceof DateTimeImmutable && $now >= $end) {
+                continue;
+            }
+            $busyLecturers[(int) $busy['lecturer_id']] = true;
+            $busyBatches[(int) $busy['batch_id']] = true;
+        }
+
         foreach ($rows as $row) {
             if ($row['status'] !== 'SCHEDULED') {
                 continue;
@@ -216,6 +266,10 @@ function sync_scheduled_session_states(bool $force = false): array
             $start = session_scheduled_datetime($row, 'start');
             $end = session_scheduled_datetime($row, 'end');
             if (!$start instanceof DateTimeImmutable || !$end instanceof DateTimeImmutable) {
+                error_log(
+                    'Lecture session timetable sync could not parse times for session_id='
+                    . $row['session_id']
+                );
                 continue;
             }
             if ($now < $start || $now >= $end) {
@@ -225,6 +279,11 @@ function sync_scheduled_session_states(bool $force = false): array
             $lecturerId = (int) $row['lecturer_id'];
             $batchId = (int) $row['batch_id'];
             if (isset($busyLecturers[$lecturerId]) || isset($busyBatches[$batchId])) {
+                error_log(
+                    'Lecture session timetable sync deferred auto-start for session_id='
+                    . $row['session_id']
+                    . ' because another IN_PROGRESS session exists for this lecturer or batch'
+                );
                 continue;
             }
 
@@ -244,12 +303,35 @@ function sync_scheduled_session_states(bool $force = false): array
             }
         }
 
-        $pdo->commit();
+        $openNow = $pdo->query(
+            "SELECT session_id, session_date, scheduled_start, scheduled_end
+             FROM lecture_sessions
+             WHERE status = 'IN_PROGRESS'
+             FOR UPDATE"
+        );
+        $openList = $openNow === false ? [] : $openNow->fetchAll();
+        if ($openNow instanceof PDOStatement) {
+            $openNow->closeCursor();
+        }
+        foreach ($openList as $openRow) {
+            $start = session_scheduled_datetime($openRow, 'start');
+            if ($start instanceof DateTimeImmutable && $now >= $start) {
+                promote_open_early_pending_for_session($pdo, (int) $openRow['session_id'], $start);
+            }
+        }
+
+        cancel_open_early_pending_for_terminal_sessions($pdo);
+
+        if ($ownsTransaction) {
+            $pdo->commit();
+            $succeeded = true;
+        }
     } catch (Throwable $exception) {
-        if (isset($pdo) && $pdo instanceof PDO && $pdo->inTransaction()) {
+        if ($ownsTransaction && $pdo->inTransaction()) {
             $pdo->rollBack();
         }
         error_log('Lecture session timetable sync failed: ' . $exception->getMessage());
+        $succeeded = false;
     }
 
     return [
@@ -362,8 +444,9 @@ function validate_time_hm(string $time): bool
 
 function normalize_time_hm(string $time): string
 {
-    if (preg_match('/^\d{2}:\d{2}:\d{2}$/', $time) === 1) {
-        return substr($time, 0, 5);
+    $time = trim($time);
+    if (preg_match('/^(\d{1,2}):(\d{2})(?::\d{2}(?:\.\d+)?)?$/', $time, $match) === 1) {
+        return sprintf('%02d:%02d', (int) $match[1], (int) $match[2]);
     }
 
     return $time;
@@ -904,7 +987,7 @@ function bulk_enroll_batch_in_module(int $batchId, int $moduleId): array
 function list_schedules(array $filters = []): array
 {
     $sql = "SELECT s.schedule_id, s.module_id, s.lecturer_id, s.batch_id, s.day_of_week,
-                   s.start_time, s.end_time, s.room, s.status,
+                   s.start_time, s.end_time, s.break_start, s.break_end, s.room, s.status,
                    m.module_code, m.module_name, m.course_id,
                    l.staff_no, l.first_name AS lecturer_first_name, l.last_name AS lecturer_last_name,
                    b.batch_name, c.course_code, c.course_name
@@ -955,7 +1038,7 @@ function get_schedule(int $scheduleId): ?array
 {
     $statement = db()->prepare(
         "SELECT s.schedule_id, s.module_id, s.lecturer_id, s.batch_id, s.day_of_week,
-                s.start_time, s.end_time, s.room, s.status,
+                s.start_time, s.end_time, s.break_start, s.break_end, s.room, s.status,
                 m.module_code, m.module_name, m.course_id,
                 l.staff_no, l.first_name AS lecturer_first_name, l.last_name AS lecturer_last_name,
                 b.batch_name, c.course_code, c.course_name
@@ -1012,6 +1095,11 @@ function validate_schedule_payload(array $data, ?int $excludeScheduleId = null):
         $errors[] = 'Enter valid start and end times.';
     } elseif ($end <= $start) {
         $errors[] = 'End time must be after start time.';
+    } else {
+        $errors = array_merge(
+            $errors,
+            validate_break_times($start, $end, $data['break_start'] ?? null, $data['break_end'] ?? null)
+        );
     }
 
     if (!in_array($status, schedule_statuses(), true)) {
@@ -1103,8 +1191,8 @@ function create_schedule(array $data): int
     }
 
     $statement = db()->prepare(
-        "INSERT INTO schedules (module_id, lecturer_id, batch_id, day_of_week, start_time, end_time, room, status)
-         VALUES (:module_id, :lecturer_id, :batch_id, :day_of_week, :start_time, :end_time, :room, :status)"
+        "INSERT INTO schedules (module_id, lecturer_id, batch_id, day_of_week, start_time, end_time, break_start, break_end, room, status)
+         VALUES (:module_id, :lecturer_id, :batch_id, :day_of_week, :start_time, :end_time, :break_start, :break_end, :room, :status)"
     );
     $room = trim((string) ($data['room'] ?? ''));
     $statement->execute([
@@ -1114,6 +1202,8 @@ function create_schedule(array $data): int
         'day_of_week' => $data['day_of_week'],
         'start_time' => normalize_time_hm((string) $data['start_time']),
         'end_time' => normalize_time_hm((string) $data['end_time']),
+        'break_start' => optional_time_hm(isset($data['break_start']) ? (string) $data['break_start'] : null),
+        'break_end' => optional_time_hm(isset($data['break_end']) ? (string) $data['break_end'] : null),
         'room' => $room === '' ? null : $room,
         'status' => $data['status'],
     ]);
@@ -1136,6 +1226,7 @@ function update_schedule(int $scheduleId, array $data): void
         "UPDATE schedules
          SET module_id = :module_id, lecturer_id = :lecturer_id, batch_id = :batch_id,
              day_of_week = :day_of_week, start_time = :start_time, end_time = :end_time,
+             break_start = :break_start, break_end = :break_end,
              room = :room, status = :status
          WHERE schedule_id = :schedule_id"
     );
@@ -1146,6 +1237,8 @@ function update_schedule(int $scheduleId, array $data): void
         'day_of_week' => $data['day_of_week'],
         'start_time' => normalize_time_hm((string) $data['start_time']),
         'end_time' => normalize_time_hm((string) $data['end_time']),
+        'break_start' => optional_time_hm(isset($data['break_start']) ? (string) $data['break_start'] : null),
+        'break_end' => optional_time_hm(isset($data['break_end']) ? (string) $data['break_end'] : null),
         'room' => $room === '' ? null : $room,
         'status' => $data['status'],
         'schedule_id' => $scheduleId,
@@ -1171,6 +1264,8 @@ function set_schedule_status(int $scheduleId, string $status): void
             'day_of_week' => $schedule['day_of_week'],
             'start_time' => $schedule['start_time'],
             'end_time' => $schedule['end_time'],
+            'break_start' => $schedule['break_start'] ?? null,
+            'break_end' => $schedule['break_end'] ?? null,
             'room' => $schedule['room'] ?? '',
             'status' => 'ACTIVE',
         ], $scheduleId);
@@ -1192,10 +1287,13 @@ function set_schedule_status(int $scheduleId, string $status): void
  */
 function list_lecture_sessions(array $filters = []): array
 {
-    sync_scheduled_session_states();
+    if (!db()->inTransaction()) {
+        sync_scheduled_session_states();
+    }
 
     $sql = "SELECT ls.session_id, ls.module_id, ls.lecturer_id, ls.batch_id, ls.schedule_id,
-                   ls.session_date, ls.scheduled_start, ls.scheduled_end, ls.actual_start, ls.actual_end,
+                   ls.session_date, ls.scheduled_start, ls.scheduled_end, ls.break_start, ls.break_end,
+                   ls.actual_start, ls.actual_end,
                    ls.room, ls.late_after_minutes, ls.status,
                    m.module_code, m.module_name, m.course_id, m.status AS module_status,
                    l.staff_no, l.first_name AS lecturer_first_name, l.last_name AS lecturer_last_name,
@@ -1255,11 +1353,14 @@ function list_lecture_sessions(array $filters = []): array
  */
 function get_lecture_session(int $sessionId): ?array
 {
-    sync_scheduled_session_states();
+    if (!db()->inTransaction()) {
+        sync_scheduled_session_states();
+    }
 
     $statement = db()->prepare(
         "SELECT ls.session_id, ls.module_id, ls.lecturer_id, ls.batch_id, ls.schedule_id,
-                ls.session_date, ls.scheduled_start, ls.scheduled_end, ls.actual_start, ls.actual_end,
+                ls.session_date, ls.scheduled_start, ls.scheduled_end, ls.break_start, ls.break_end,
+                ls.actual_start, ls.actual_end,
                 ls.room, ls.late_after_minutes, ls.status,
                 m.module_code, m.module_name, m.course_id, m.status AS module_status,
                 l.staff_no, l.first_name AS lecturer_first_name, l.last_name AS lecturer_last_name,
@@ -1345,6 +1446,11 @@ function create_lecture_session(array $data): int
         throw new InvalidArgumentException('Late after minutes must be between 0 and 180.');
     }
 
+    $breakErrors = validate_break_times($start, $end, $data['break_start'] ?? null, $data['break_end'] ?? null);
+    if ($breakErrors !== []) {
+        throw new InvalidArgumentException($breakErrors[0]);
+    }
+
     if ((int) $module['course_id'] !== (int) $batch['course_id']) {
         throw new InvalidArgumentException('The module and batch must belong to the same course.');
     }
@@ -1359,9 +1465,9 @@ function create_lecture_session(array $data): int
 
     $statement = db()->prepare(
         "INSERT INTO lecture_sessions
-            (module_id, lecturer_id, batch_id, schedule_id, session_date, scheduled_start, scheduled_end, room, late_after_minutes, status)
+            (module_id, lecturer_id, batch_id, schedule_id, session_date, scheduled_start, scheduled_end, break_start, break_end, room, late_after_minutes, status)
          VALUES
-            (:module_id, :lecturer_id, :batch_id, :schedule_id, :session_date, :scheduled_start, :scheduled_end, :room, :late_after_minutes, 'SCHEDULED')"
+            (:module_id, :lecturer_id, :batch_id, :schedule_id, :session_date, :scheduled_start, :scheduled_end, :break_start, :break_end, :room, :late_after_minutes, 'SCHEDULED')"
     );
     $statement->execute([
         'module_id' => $moduleId,
@@ -1371,6 +1477,8 @@ function create_lecture_session(array $data): int
         'session_date' => $date,
         'scheduled_start' => $start,
         'scheduled_end' => $end,
+        'break_start' => optional_time_hm(isset($data['break_start']) ? (string) $data['break_start'] : null),
+        'break_end' => optional_time_hm(isset($data['break_end']) ? (string) $data['break_end'] : null),
         'room' => $room === '' ? null : $room,
         'late_after_minutes' => $lateAfter,
     ]);
@@ -1415,9 +1523,9 @@ function generate_sessions_for_week(string $weekDate, int $lateAfterMinutes = 15
 
             $insert = $pdo->prepare(
                 "INSERT INTO lecture_sessions
-                    (module_id, lecturer_id, batch_id, schedule_id, session_date, scheduled_start, scheduled_end, room, late_after_minutes, status)
+                    (module_id, lecturer_id, batch_id, schedule_id, session_date, scheduled_start, scheduled_end, break_start, break_end, room, late_after_minutes, status)
                  VALUES
-                    (:module_id, :lecturer_id, :batch_id, :schedule_id, :session_date, :scheduled_start, :scheduled_end, :room, :late_after_minutes, 'SCHEDULED')"
+                    (:module_id, :lecturer_id, :batch_id, :schedule_id, :session_date, :scheduled_start, :scheduled_end, :break_start, :break_end, :room, :late_after_minutes, 'SCHEDULED')"
             );
             $insert->execute([
                 'module_id' => $schedule['module_id'],
@@ -1427,6 +1535,8 @@ function generate_sessions_for_week(string $weekDate, int $lateAfterMinutes = 15
                 'session_date' => $sessionDate,
                 'scheduled_start' => normalize_time_hm((string) $schedule['start_time']),
                 'scheduled_end' => normalize_time_hm((string) $schedule['end_time']),
+                'break_start' => optional_time_hm(isset($schedule['break_start']) ? (string) $schedule['break_start'] : null),
+                'break_end' => optional_time_hm(isset($schedule['break_end']) ? (string) $schedule['break_end'] : null),
                 'room' => $schedule['room'],
                 'late_after_minutes' => $lateAfterMinutes,
             ]);
@@ -1573,6 +1683,7 @@ function complete_lecture_session(int $sessionId): void
         'actual_end' => app_now_datetime(),
         'session_id' => $sessionId,
     ]);
+    cancel_open_early_pending_for_session(db(), $sessionId);
 }
 
 function cancel_lecture_session(int $sessionId): void
@@ -1602,6 +1713,7 @@ function cancel_lecture_session(int $sessionId): void
 
     $statement = db()->prepare($sql);
     $statement->execute($params);
+    cancel_open_early_pending_for_session(db(), $sessionId);
 }
 
 function is_student_eligible_for_session(int $studentId, int $sessionId): bool
@@ -1714,7 +1826,7 @@ function list_student_schedules(int $studentId): array
 
     $statement = db()->prepare(
         "SELECT s.schedule_id, s.module_id, s.lecturer_id, s.batch_id, s.day_of_week,
-                s.start_time, s.end_time, s.room, s.status,
+                s.start_time, s.end_time, s.break_start, s.break_end, s.room, s.status,
                 m.module_code, m.module_name,
                 l.first_name AS lecturer_first_name, l.last_name AS lecturer_last_name,
                 b.batch_name, c.course_code
@@ -1813,21 +1925,6 @@ function normalize_camera_id(?string $cameraId): ?string
     return $value === '' ? null : $value;
 }
 
-function student_has_in_event(int $studentId, int $sessionId): bool
-{
-    $statement = db()->prepare(
-        "SELECT event_id FROM attendance_events
-         WHERE student_id = :student_id AND session_id = :session_id AND event_type = 'IN'
-         LIMIT 1"
-    );
-    $statement->execute([
-        'student_id' => $studentId,
-        'session_id' => $sessionId,
-    ]);
-
-    return $statement->fetch() !== false;
-}
-
 /**
  * Resolve which IN_PROGRESS session a recognized student may check in to.
  * Does not insert attendance. Reuses is_student_eligible_for_session().
@@ -1891,152 +1988,4 @@ function resolve_in_progress_session_for_student(int $studentId): array
     ];
 }
 
-/**
- * Record a face-recognition IN event when exactly one eligible session is IN_PROGRESS.
- * Does not write OUT events or attendance_records.
- *
- * @return array<string, mixed>
- */
-function record_face_check_in(int $studentId, float $confidence, ?string $cameraId = null): array
-{
-    $resolution = resolve_in_progress_session_for_student($studentId);
-    if (($resolution['result'] ?? '') !== 'ELIGIBLE') {
-        return public_check_in_result($resolution);
-    }
-
-    /** @var array<string, mixed> $session */
-    $session = $resolution['session'];
-    $sessionId = (int) $session['session_id'];
-    $camera = normalize_camera_id($cameraId);
-    $confidence = max(0.0, min(100.0, round($confidence, 2)));
-    $lockName = sprintf('att_in_%d_%d', $studentId, $sessionId);
-
-    $pdo = db();
-    $lockAcquired = false;
-
-    try {
-        $lockStatement = $pdo->prepare('SELECT GET_LOCK(:lock_name, 5)');
-        $lockStatement->execute(['lock_name' => $lockName]);
-        $lockAcquired = (int) $lockStatement->fetchColumn() === 1;
-        if (!$lockAcquired) {
-            error_log('Could not acquire attendance IN lock for student_id=' . $studentId . ' session_id=' . $sessionId);
-            return [
-                'result' => 'ERROR',
-                'student_id' => $studentId,
-            ];
-        }
-
-        $pdo->beginTransaction();
-
-        $statusLock = $pdo->prepare(
-            "SELECT session_id, status FROM lecture_sessions WHERE session_id = :session_id FOR UPDATE"
-        );
-        $statusLock->execute(['session_id' => $sessionId]);
-        $lockedSession = $statusLock->fetch();
-        if ($lockedSession === false || $lockedSession['status'] !== 'IN_PROGRESS') {
-            $pdo->rollBack();
-            return [
-                'result' => 'NO_ACTIVE_SESSION',
-                'student_id' => $studentId,
-            ];
-        }
-
-        if (!is_student_eligible_for_session($studentId, $sessionId)) {
-            $pdo->rollBack();
-            return [
-                'result' => 'NOT_ELIGIBLE',
-                'student_id' => $studentId,
-                'session_id' => $sessionId,
-                'module_code' => $session['module_code'] ?? null,
-            ];
-        }
-
-        $existing = $pdo->prepare(
-            "SELECT event_id, recognized_at FROM attendance_events
-             WHERE student_id = :student_id AND session_id = :session_id AND event_type = 'IN'
-             ORDER BY recognized_at ASC, event_id ASC
-             LIMIT 1"
-        );
-        $existing->execute([
-            'student_id' => $studentId,
-            'session_id' => $sessionId,
-        ]);
-        $existingIn = $existing->fetch();
-        if ($existingIn !== false) {
-            $pdo->commit();
-            return [
-                'result' => 'ALREADY_CHECKED_IN',
-                'student_id' => $studentId,
-                'session_id' => $sessionId,
-                'module_code' => $session['module_code'] ?? null,
-                'event_id' => (int) $existingIn['event_id'],
-                'recognized_at' => (string) $existingIn['recognized_at'],
-            ];
-        }
-
-        $recognizedAt = app_now_datetime();
-        $insert = $pdo->prepare(
-            "INSERT INTO attendance_events
-                (student_id, session_id, event_type, recognized_at, confidence, camera_id)
-             VALUES
-                (:student_id, :session_id, 'IN', :recognized_at, :confidence, :camera_id)"
-        );
-        $insert->execute([
-            'student_id' => $studentId,
-            'session_id' => $sessionId,
-            'recognized_at' => $recognizedAt,
-            'confidence' => $confidence,
-            'camera_id' => $camera,
-        ]);
-        $eventId = (int) $pdo->lastInsertId();
-        $pdo->commit();
-
-        return [
-            'result' => 'CHECKED_IN',
-            'student_id' => $studentId,
-            'session_id' => $sessionId,
-            'module_code' => $session['module_code'] ?? null,
-            'event_id' => $eventId,
-            'recognized_at' => $recognizedAt,
-            'confidence' => $confidence,
-            'camera_id' => $camera,
-        ];
-    } catch (Throwable $exception) {
-        if ($pdo->inTransaction()) {
-            $pdo->rollBack();
-        }
-        error_log('Face check-in failed for student_id=' . $studentId . ': ' . $exception->getMessage());
-        return [
-            'result' => 'ERROR',
-            'student_id' => $studentId,
-        ];
-    } finally {
-        if ($lockAcquired) {
-            $release = $pdo->prepare('SELECT RELEASE_LOCK(:lock_name)');
-            $release->execute(['lock_name' => $lockName]);
-        }
-    }
-}
-
-/**
- * @param array<string, mixed> $resolution
- * @return array<string, mixed>
- */
-function public_check_in_result(array $resolution): array
-{
-    $result = (string) ($resolution['result'] ?? 'ERROR');
-    $payload = ['result' => $result];
-
-    if (isset($resolution['student']['student_id'])) {
-        $payload['student_id'] = (int) $resolution['student']['student_id'];
-    }
-    if (isset($resolution['session']['session_id'])) {
-        $payload['session_id'] = (int) $resolution['session']['session_id'];
-        $payload['module_code'] = $resolution['session']['module_code'] ?? null;
-    }
-    if (isset($resolution['session_ids'])) {
-        $payload['session_ids'] = $resolution['session_ids'];
-    }
-
-    return $payload;
-}
+require_once __DIR__ . '/attendance.php';

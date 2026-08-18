@@ -22,6 +22,8 @@ $form = [
     'session_date' => app_today(),
     'scheduled_start' => '09:00',
     'scheduled_end' => '11:00',
+    'break_start' => '',
+    'break_end' => '',
     'room' => '',
     'late_after_minutes' => '15',
 ];
@@ -44,6 +46,8 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
             'session_date' => $form['session_date'],
             'scheduled_start' => $form['scheduled_start'],
             'scheduled_end' => $form['scheduled_end'],
+            'break_start' => $form['break_start'],
+            'break_end' => $form['break_end'],
             'room' => $form['room'],
             'late_after_minutes' => (int) $form['late_after_minutes'],
         ]);
@@ -114,6 +118,15 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
             <div class="col-md-3">
                 <label for="scheduled_end" class="form-label">End Time</label>
                 <input type="time" class="form-control" id="scheduled_end" name="scheduled_end" value="<?= e($form['scheduled_end']) ?>" required>
+            </div>
+            <div class="col-md-3">
+                <label for="break_start" class="form-label">Official Break Start</label>
+                <input type="time" class="form-control" id="break_start" name="break_start" value="<?= e($form['break_start']) ?>">
+            </div>
+            <div class="col-md-3">
+                <label for="break_end" class="form-label">Official Break End</label>
+                <input type="time" class="form-control" id="break_end" name="break_end" value="<?= e($form['break_end']) ?>">
+                <div class="form-text">Optional. Leave empty for no official break.</div>
             </div>
             <div class="col-md-3">
                 <label for="room" class="form-label">Room</label>

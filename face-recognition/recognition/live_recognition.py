@@ -6,7 +6,8 @@ Usage (from the face-recognition directory, venv active):
     python -m recognition.live_recognition
 
 Press Q to quit, R to reload enrolled profiles.
-Eligible recognized students are checked in once per IN_PROGRESS session.
+Eligible recognized students are checked in/out through PHP using an explicit
+ENTRY or EXIT camera mode. Press E to toggle mode on a single test webcam.
 """
 
 from __future__ import annotations
@@ -27,7 +28,7 @@ if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
 import config
-from recognition.attendance_client import AttendanceDecision, submit_recognized_check_in, unknown_decision
+from recognition.attendance_client import AttendanceDecision, submit_recognized_attendance, unknown_decision
 from recognition.cooldown import RecognitionCooldown
 from recognition.matcher import MatchResult, match_encoding
 from recognition.metrics import RecognitionMetrics
@@ -82,7 +83,15 @@ def _draw_match(
     top, right, bottom, left = location
     if decision.code == 'UNKNOWN' or not match.is_match:
         color, text_color = _BOX_UNKNOWN, _TEXT_UNKNOWN
-    elif decision.code in {'NOT_ELIGIBLE', 'NO_ACTIVE_SESSION', 'AMBIGUOUS_ACTIVE_SESSIONS', 'INVALID_STUDENT'}:
+    elif decision.code in {
+        'NOT_ELIGIBLE',
+        'NO_ACTIVE_SESSION',
+        'AMBIGUOUS_ACTIVE_SESSIONS',
+        'INVALID_STUDENT',
+        'TOO_EARLY',
+        'EARLY_PENDING',
+        'EARLY_EXIT',
+    }:
         color, text_color = _BOX_WARN, _TEXT_WARN
     else:
         color, text_color = _BOX_KNOWN, _TEXT_KNOWN
@@ -94,9 +103,9 @@ def _draw_match(
         lines.append(match.full_name or match.label)
         if match.registration_no:
             lines.append(str(match.registration_no))
-        if decision.code in {'CHECKED_IN', 'ALREADY_CHECKED_IN'} and decision.module_code:
+        if decision.code in {'CHECKED_IN', 'RE_ENTERED', 'CHECKED_OUT', 'ALREADY_INSIDE', 'ALREADY_CHECKED_IN'} and decision.module_code:
             lines.append(str(decision.module_code))
-        if decision.code == 'CHECKED_IN' and decision.recognized_at:
+        if decision.code in {'CHECKED_IN', 'RE_ENTERED', 'CHECKED_OUT'} and decision.recognized_at:
             lines.append(str(decision.recognized_at))
     elif match.distance is not None:
         lines.append(f'd={match.distance:.3f}')
@@ -118,6 +127,7 @@ def _attendance_for_match(
     match: MatchResult,
     cooldown: RecognitionCooldown,
     cache: dict[int, AttendanceDecision],
+    camera_mode: str,
 ) -> AttendanceDecision:
     if not match.is_match or match.student_id is None:
         return unknown_decision()
@@ -126,41 +136,62 @@ def _attendance_for_match(
     if not cooldown.observe(student_id):
         cached = cache.get(student_id)
         if cached is None:
-            return AttendanceDecision(code='ERROR')
-        if cached.code == 'CHECKED_IN':
+            return AttendanceDecision(code='ERROR', camera_mode=camera_mode)
+        if cached.code in {'CHECKED_IN', 'RE_ENTERED'} and camera_mode == 'ENTRY':
             return AttendanceDecision(
-                code='ALREADY_CHECKED_IN',
+                code='ALREADY_INSIDE',
                 module_code=cached.module_code,
                 recognized_at=cached.recognized_at,
                 session_id=cached.session_id,
                 event_id=cached.event_id,
+                camera_mode=camera_mode,
+            )
+        if cached.code == 'CHECKED_OUT' and camera_mode == 'EXIT':
+            return AttendanceDecision(
+                code='ALREADY_OUTSIDE',
+                module_code=cached.module_code,
+                recognized_at=cached.recognized_at,
+                session_id=cached.session_id,
+                event_id=cached.event_id,
+                camera_mode=camera_mode,
             )
         return cached
 
-    decision = submit_recognized_check_in(student_id, match.confidence)
+    decision = submit_recognized_attendance(student_id, match.confidence, camera_mode)
     cache[student_id] = decision
-    if decision.code == 'CHECKED_IN':
+    if decision.code in {'CHECKED_IN', 'RE_ENTERED'}:
         logger.info(
-            'Checked in student_id=%s session_id=%s module=%s event_id=%s',
+            '%s student_id=%s session_id=%s module=%s event_id=%s mode=%s',
+            decision.code,
             student_id,
             decision.session_id,
             decision.module_code,
             decision.event_id,
+            camera_mode,
         )
-    elif decision.code == 'ALREADY_CHECKED_IN':
-        logger.info('Already checked in student_id=%s session_id=%s', student_id, decision.session_id)
-    elif decision.code in {'NOT_ELIGIBLE', 'NO_ACTIVE_SESSION', 'AMBIGUOUS_ACTIVE_SESSIONS'}:
-        logger.info('No attendance write for student_id=%s result=%s', student_id, decision.code)
+    elif decision.code == 'CHECKED_OUT':
+        logger.info('Checked out student_id=%s session_id=%s', student_id, decision.session_id)
+    elif decision.code in {
+        'ALREADY_INSIDE',
+        'ALREADY_OUTSIDE',
+        'EARLY_PENDING',
+        'EARLY_EXIT',
+        'TOO_EARLY',
+        'NOT_ELIGIBLE',
+        'NO_ACTIVE_SESSION',
+        'AMBIGUOUS_ACTIVE_SESSIONS',
+    }:
+        logger.info('No new attendance event for student_id=%s result=%s', student_id, decision.code)
     elif decision.code == 'ERROR':
         logger.warning('Attendance unavailable for student_id=%s', student_id)
     return decision
 
 
-def _draw_hud(frame: np.ndarray, gallery: FaceGallery, fps: float, processing_ms: float | None) -> None:
+def _draw_hud(frame: np.ndarray, gallery: FaceGallery, fps: float, processing_ms: float | None, camera_mode: str) -> None:
     lines = [
         f'Enrolled: {gallery.student_count}  skipped: {len(gallery.skipped)}  threshold: {config.MATCH_THRESHOLD:.2f}',
         f'FPS: {fps:.1f}  last process: {processing_ms:.0f} ms' if processing_ms is not None else f'FPS: {fps:.1f}',
-        'Q quit   R reload profiles',
+        f'Camera mode: {camera_mode}   E toggle ENTRY/EXIT   Q quit   R reload',
     ]
     y = 24
     for line in lines:
@@ -174,8 +205,8 @@ def run_live_recognition(
     cooldown: RecognitionCooldown | None = None,
 ) -> dict:
     """
-    Open the webcam, identify enrolled students, and record IN attendance
-    through PHP when exactly one eligible lecture is IN_PROGRESS.
+    Open the webcam, identify enrolled students, and record IN/OUT attendance
+    through PHP. Direction comes from camera_mode (press E to toggle).
     """
     gallery = get_gallery()
     if metrics is None:
@@ -188,7 +219,7 @@ def run_live_recognition(
         logger.error('Cannot open camera index %s', config.CAMERA_INDEX)
         return {'success': False, 'error': 'Cannot open camera', 'cancelled': False}
 
-    window_title = 'SmartAMS – Live Recognition (Q quit, R reload)'
+    window_title = 'SmartAMS – Live Recognition (E mode, Q quit, R reload)'
     frame_index = 0
     last_results: list[tuple[tuple[int, int, int, int], MatchResult, AttendanceDecision]] = []
     last_process_ms: float | None = None
@@ -197,6 +228,7 @@ def run_live_recognition(
     fps_t0 = time.perf_counter()
     cancelled = False
     attendance_cache: dict[int, AttendanceDecision] = {}
+    camera_mode = config.ATTENDANCE_CAMERA_MODE
 
     logger.info(
         'Live recognition started (threshold=%.3f, match_k=%s, scale=%.2f, skip=%s)',
@@ -238,7 +270,7 @@ def run_live_recognition(
                 last_results = []
                 for location, match in recognized:
                     try:
-                        decision = _attendance_for_match(match, cooldown, attendance_cache)
+                        decision = _attendance_for_match(match, cooldown, attendance_cache, camera_mode)
                     except Exception:
                         logger.exception('Attendance handling failed for a face; continuing recognition')
                         decision = AttendanceDecision(code='ERROR') if match.is_match else unknown_decision()
@@ -247,10 +279,15 @@ def run_live_recognition(
             display = frame
             for location, match, decision in last_results:
                 _draw_match(display, location, match, decision)
-            _draw_hud(display, gallery, fps, last_process_ms)
+            _draw_hud(display, gallery, fps, last_process_ms, camera_mode)
 
             cv2.imshow(window_title, display)
             key = cv2.waitKey(1) & 0xFF
+            if key in (ord('e'), ord('E')):
+                camera_mode = 'EXIT' if camera_mode == 'ENTRY' else 'ENTRY'
+                attendance_cache.clear()
+                cooldown.clear()
+                logger.info('Camera mode set to %s', camera_mode)
             if key in (ord('q'), ord('Q')):
                 cancelled = True
                 break

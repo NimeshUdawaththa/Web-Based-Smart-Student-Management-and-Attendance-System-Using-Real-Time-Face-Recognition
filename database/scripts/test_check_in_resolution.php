@@ -28,7 +28,7 @@ if ($studentId <= 0) {
     exit(1);
 }
 
-$resolution = resolve_in_progress_session_for_student($studentId);
+$resolution = resolve_attendance_session_for_student($studentId);
 echo 'result=' . ($resolution['result'] ?? '') . PHP_EOL;
 if (isset($resolution['session']['session_id'])) {
     echo 'session_id=' . $resolution['session']['session_id'] . PHP_EOL;

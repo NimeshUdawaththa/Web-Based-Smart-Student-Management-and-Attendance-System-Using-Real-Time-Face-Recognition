@@ -37,6 +37,13 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
         } elseif ($action === 'cancel') {
             cancel_lecture_session($sessionId);
             set_flash('success', 'Lecture session cancelled.');
+        } elseif ($action === 'update_break') {
+            update_lecture_session_break(
+                $sessionId,
+                (string) ($_POST['break_start'] ?? ''),
+                (string) ($_POST['break_end'] ?? '')
+            );
+            set_flash('success', 'Official break updated for this session.');
         } else {
             throw new InvalidArgumentException('Unknown action.');
         }
@@ -64,6 +71,18 @@ $lifecycleNote = session_lifecycle_note($session);
 
 $eligibleStudents = list_eligible_students_for_session($sessionId);
 $lateThreshold = late_threshold_time((string) $session['scheduled_start'], (int) $session['late_after_minutes']);
+$sessionEvents = list_session_attendance_events($sessionId);
+$sessionPending = list_session_early_pending($sessionId);
+$attendancePreviews = [];
+foreach ($eligibleStudents as $student) {
+    $attendancePreviews[] = calculate_session_attendance_preview($session, (int) $student['student_id']) + [
+        'registration_no' => $student['registration_no'],
+        'first_name' => $student['first_name'],
+        'last_name' => $student['last_name'],
+    ];
+}
+$breakStartValue = optional_time_hm(isset($session['break_start']) ? (string) $session['break_start'] : null) ?? '';
+$breakEndValue = optional_time_hm(isset($session['break_end']) ? (string) $session['break_end'] : null) ?? '';
 
 require INCLUDES_PATH . '/dashboard-layout-start.php';
 ?>
@@ -80,9 +99,12 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
                 <p class="text-muted mb-2">
                     <?= e($session['course_code'] . ' · ' . $session['batch_name']) ?><br>
                     <?= e($session['session_date']) ?>
-                    · <?= e(format_time_display($session['scheduled_start']) . ' – ' . format_time_display($session['scheduled_end'])) ?>
+                    · Lecture <?= e(format_time_display($session['scheduled_start']) . ' – ' . format_time_display($session['scheduled_end'])) ?>
                     · Room <?= e($session['room'] ?: '-') ?><br>
-                    Lecturer: <?= e($session['lecturer_first_name'] . ' ' . $session['lecturer_last_name']) ?>
+                    Lecturer: <?= e($session['lecturer_first_name'] . ' ' . $session['lecturer_last_name']) ?><br>
+                    Late after: <?= e((string) $session['late_after_minutes']) ?> min
+                    (threshold <?= e($lateThreshold) ?>, not finalized)<br>
+                    Official break: <?= e(format_break_display($session['break_start'] ?? null, $session['break_end'] ?? null)) ?>
                 </p>
                 <span class="badge <?= e(status_badge_class($session['status'])) ?>"><?= e($session['status']) ?></span>
                 <?php if ($lifecycleNote !== ''): ?>
@@ -121,8 +143,172 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
             <div class="col-md-3"><strong>Actual start</strong><br><?= e($session['actual_start'] ?: 'Not started') ?></div>
             <div class="col-md-3"><strong>Actual end</strong><br><?= e($session['actual_end'] ?: 'Not ended') ?></div>
             <div class="col-md-3"><strong>Late after</strong><br><?= e((string) $session['late_after_minutes']) ?> minutes</div>
-            <div class="col-md-3"><strong>Late threshold</strong><br><?= e($lateThreshold) ?> <span class="text-muted">(not applied yet)</span></div>
+            <div class="col-md-3"><strong>Official break</strong><br><?= e(format_break_display($session['break_start'] ?? null, $session['break_end'] ?? null)) ?></div>
         </div>
+    </div>
+</div>
+
+<?php if ($canControl && !in_array($session['status'], ['COMPLETED', 'CANCELLED'], true)): ?>
+    <div class="card shadow-sm mb-4">
+        <div class="card-body">
+            <h2 class="h6">Official break for this session</h2>
+            <p class="small text-muted">Inherited from the timetable when generated. You may override it for this occurrence only.</p>
+            <form method="post" class="row g-3 align-items-end">
+                <?= csrf_field() ?>
+                <input type="hidden" name="session_id" value="<?= e((string) $sessionId) ?>">
+                <input type="hidden" name="action" value="update_break">
+                <div class="col-md-3">
+                    <label for="break_start" class="form-label">Break start</label>
+                    <input type="time" class="form-control" id="break_start" name="break_start" value="<?= e($breakStartValue) ?>">
+                </div>
+                <div class="col-md-3">
+                    <label for="break_end" class="form-label">Break end</label>
+                    <input type="time" class="form-control" id="break_end" name="break_end" value="<?= e($breakEndValue) ?>">
+                </div>
+                <div class="col-md-3">
+                    <button type="submit" class="btn btn-outline-primary">Save break</button>
+                </div>
+            </form>
+        </div>
+    </div>
+<?php endif; ?>
+
+<div class="card shadow-sm mb-4">
+    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+        <h2 class="h6 mb-0">Attendance events (audit)</h2>
+        <span class="badge text-bg-secondary"><?= count($sessionEvents) ?></span>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-sm mb-0 align-middle">
+            <thead class="table-light">
+                <tr>
+                    <th>Time</th>
+                    <th>Student</th>
+                    <th>Event</th>
+                    <th>Camera</th>
+                    <th>Confidence</th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php if ($sessionEvents === []): ?>
+                    <tr><td colspan="5" class="text-center text-muted py-3">No IN/OUT events yet.</td></tr>
+                <?php else: ?>
+                    <?php foreach ($sessionEvents as $event): ?>
+                        <tr>
+                            <td><?= e((string) $event['recognized_at']) ?></td>
+                            <td><?= e($event['registration_no'] . ' · ' . $event['first_name'] . ' ' . $event['last_name']) ?></td>
+                            <td><span class="badge <?= e($event['event_type'] === 'IN' ? 'text-bg-success' : 'text-bg-secondary') ?>"><?= e($event['event_type']) ?></span></td>
+                            <td><?= e($event['camera_id'] ?: '-') ?></td>
+                            <td><?= e((string) $event['confidence']) ?></td>
+                        </tr>
+                    <?php endforeach; ?>
+                <?php endif; ?>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<?php if ($canControl || $canManage): ?>
+    <div class="card shadow-sm mb-4">
+        <div class="card-header bg-white d-flex justify-content-between align-items-center">
+            <h2 class="h6 mb-0">Early arrival pending (door camera)</h2>
+            <span class="badge text-bg-secondary"><?= count($sessionPending) ?></span>
+        </div>
+        <div class="card-body py-2">
+            <p class="small text-muted mb-0">
+                Diagnostic only. Pending inside students are promoted to an official IN at scheduled start.
+                No face images or embeddings are stored here.
+            </p>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-sm mb-0 align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th>Student</th>
+                        <th>Early entry</th>
+                        <th>Presence</th>
+                        <th>Last direction</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php if ($sessionPending === []): ?>
+                        <tr><td colspan="5" class="text-center text-muted py-3">No early-arrival pending rows.</td></tr>
+                    <?php else: ?>
+                        <?php foreach ($sessionPending as $pending): ?>
+                            <tr>
+                                <td><?= e($pending['registration_no'] . ' · ' . $pending['first_name'] . ' ' . $pending['last_name']) ?></td>
+                                <td><?= e($pending['early_entry_time'] ?: '—') ?></td>
+                                <td><?= (int) $pending['inside'] === 1 ? 'Inside' : 'Outside' ?></td>
+                                <td><?= e((string) $pending['last_direction']) ?></td>
+                                <td><span class="badge <?= e(status_badge_class((string) $pending['status'])) ?>"><?= e((string) $pending['status']) ?></span></td>
+                            </tr>
+                        <?php endforeach; ?>
+                    <?php endif; ?>
+                </tbody>
+            </table>
+        </div>
+    </div>
+<?php endif; ?>
+
+<div class="card shadow-sm mb-4">
+    <div class="card-header bg-white">
+        <h2 class="h6 mb-0">Teaching-time preview</h2>
+    </div>
+    <div class="card-body py-2">
+        <p class="small text-muted mb-0">
+            Preview only. Official break does not count as missed teaching time.
+            PRESENT / LATE / ABSENT / LEFT EARLY are not saved yet.
+        </p>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-sm mb-0 align-middle">
+            <thead class="table-light">
+                <tr>
+                    <th>Student</th>
+                    <th>First IN</th>
+                    <th>Last OUT</th>
+                    <th>Attended</th>
+                    <th>Missed</th>
+                    <th>%</th>
+                    <th>Preview flags</th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php if ($attendancePreviews === []): ?>
+                    <tr><td colspan="7" class="text-center text-muted py-3">No eligible students.</td></tr>
+                <?php else: ?>
+                    <?php foreach ($attendancePreviews as $preview): ?>
+                        <tr>
+                            <td><?= e($preview['registration_no'] . ' · ' . $preview['first_name'] . ' ' . $preview['last_name']) ?></td>
+                            <td><?= e($preview['first_official_entry'] ?: '-') ?></td>
+                            <td><?= e($preview['last_exit'] ?: '-') ?></td>
+                            <td><?= e((string) $preview['attended_teaching_minutes']) ?> / <?= e((string) $preview['teaching_minutes']) ?> min</td>
+                            <td><?= e((string) $preview['missed_teaching_minutes']) ?> min</td>
+                            <td><?= e((string) $preview['attendance_percent']) ?>%</td>
+                            <td class="small text-muted">
+                                <?php
+                                $flags = [];
+                                if ($preview['preview_on_time_candidate']) {
+                                    $flags[] = 'on-time?';
+                                }
+                                if ($preview['preview_late_candidate']) {
+                                    $flags[] = 'late?';
+                                }
+                                if ($preview['preview_left_early_candidate']) {
+                                    $flags[] = 'left early?';
+                                }
+                                if ($preview['preview_absent_candidate']) {
+                                    $flags[] = 'absent?';
+                                }
+                                echo e($flags === [] ? '—' : implode(', ', $flags));
+                                ?>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                <?php endif; ?>
+            </tbody>
+        </table>
     </div>
 </div>
 

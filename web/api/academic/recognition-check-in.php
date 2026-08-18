@@ -4,9 +4,10 @@ declare(strict_types=1);
 
 /**
  * Internal face check-in bridge.
- * Flask posts a recognized student_id. PHP first synchronizes timetable session
- * states, then resolves the eligible IN_PROGRESS session and inserts at most
- * one attendance_events IN row.
+ * Flask posts a recognized student_id and camera mode (ENTRY or EXIT).
+ * PHP first synchronizes timetable session states, records early door
+ * ENTRY/EXIT as pending, promotes pending insides at scheduled start,
+ * then records official IN/OUT/re-entry according to presence state.
  *
  * HTTP: POST /api/academic/recognition-check-in.php
  * CLI:  php recognition-check-in.php '{"student_id":3,"confidence":80,"camera_id":"webcam-0"}'
@@ -63,8 +64,12 @@ $cameraId = isset($data['camera_id']) && is_string($data['camera_id'])
     ? $data['camera_id']
     : null;
 
+$cameraMode = isset($data['camera_mode']) && is_string($data['camera_mode'])
+    ? $data['camera_mode']
+    : null;
+
 try {
-    $result = record_face_check_in($studentId, (float) $confidence, $cameraId);
+    $result = record_face_attendance_event($studentId, (float) $confidence, $cameraId, $cameraMode);
 } catch (Throwable $exception) {
     error_log('recognition-check-in failed: ' . $exception->getMessage());
     http_response_code(500);

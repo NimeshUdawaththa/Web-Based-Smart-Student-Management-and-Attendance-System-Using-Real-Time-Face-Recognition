@@ -14,6 +14,7 @@ require_once dirname(__DIR__, 2) . '/config/config.php';
 require_once dirname(__DIR__, 2) . '/config/database.php';
 require_once dirname(__DIR__, 2) . '/shared/includes/management.php';
 require_once dirname(__DIR__, 2) . '/shared/includes/academic.php';
+require_once dirname(__DIR__, 2) . '/shared/includes/attendance.php';
 
 function internal_api_token(): string
 {

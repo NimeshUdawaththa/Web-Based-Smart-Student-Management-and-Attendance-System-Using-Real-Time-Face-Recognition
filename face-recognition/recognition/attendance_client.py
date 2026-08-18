@@ -1,7 +1,8 @@
 """
-Ask PHP to resolve the eligible IN_PROGRESS session and record an IN event.
+Ask PHP to resolve timetable windows and record IN/OUT/re-entry events.
 
 Does not send embeddings or images. UNKNOWN faces must never call this module.
+Direction is explicit camera_mode (ENTRY or EXIT), not inferred by alternating.
 """
 
 from __future__ import annotations
@@ -20,6 +21,24 @@ logger = logging.getLogger(__name__)
 
 _CHECKIN_SCRIPT = config.PROJECT_ROOT / 'web' / 'api' / 'academic' / 'recognition-check-in.php'
 
+_OVERLAY = {
+    'UNKNOWN': 'UNKNOWN',
+    'CHECKED_IN': 'CHECKED IN',
+    'RE_ENTERED': 'RE-ENTERED',
+    'ALREADY_INSIDE': 'ALREADY INSIDE',
+    'ALREADY_CHECKED_IN': 'ALREADY INSIDE',
+    'CHECKED_OUT': 'CHECKED OUT',
+    'ALREADY_OUTSIDE': 'ALREADY OUTSIDE',
+    'EARLY_PENDING': 'EARLY ARRIVAL / PENDING',
+    'EARLY_EXIT': 'LEFT BEFORE START',
+    'TOO_EARLY': 'TOO EARLY',
+    'NOT_ELIGIBLE': 'NOT ELIGIBLE',
+    'NO_ACTIVE_SESSION': 'NO ACTIVE SESSION',
+    'AMBIGUOUS_ACTIVE_SESSIONS': 'NO ACTIVE SESSION',
+    'INVALID_STUDENT': 'NOT ELIGIBLE',
+    'ERROR': 'RECOGNIZED',
+}
+
 
 @dataclass(frozen=True)
 class AttendanceDecision:
@@ -28,30 +47,28 @@ class AttendanceDecision:
     recognized_at: str | None = None
     session_id: int | None = None
     event_id: int | None = None
+    camera_mode: str | None = None
 
     @property
     def overlay_title(self) -> str:
-        return {
-            'UNKNOWN': 'UNKNOWN',
-            'CHECKED_IN': 'CHECKED IN',
-            'ALREADY_CHECKED_IN': 'ALREADY CHECKED IN',
-            'NOT_ELIGIBLE': 'NOT ELIGIBLE',
-            'NO_ACTIVE_SESSION': 'NO ACTIVE SESSION',
-            'AMBIGUOUS_ACTIVE_SESSIONS': 'NO ACTIVE SESSION',
-            'INVALID_STUDENT': 'NOT ELIGIBLE',
-            'ERROR': 'RECOGNIZED',
-        }.get(self.code, 'RECOGNIZED')
+        return _OVERLAY.get(self.code, 'RECOGNIZED')
 
 
 def unknown_decision() -> AttendanceDecision:
     return AttendanceDecision(code='UNKNOWN')
 
 
-def submit_recognized_check_in(student_id: int, confidence: float | None) -> AttendanceDecision:
+def submit_recognized_attendance(
+    student_id: int,
+    confidence: float | None,
+    camera_mode: str,
+) -> AttendanceDecision:
+    mode = camera_mode if camera_mode in {'ENTRY', 'EXIT'} else 'ENTRY'
     payload = {
         'student_id': int(student_id),
         'confidence': round(float(confidence) if confidence is not None else 0.0, 2),
         'camera_id': config.ATTENDANCE_CAMERA_ID,
+        'camera_mode': mode,
     }
 
     try:
@@ -61,7 +78,7 @@ def submit_recognized_check_in(student_id: int, confidence: float | None) -> Att
             data = _run_php_cli(payload)
     except Exception:
         logger.exception('Attendance bridge failed for student_id=%s', student_id)
-        return AttendanceDecision(code='ERROR')
+        return AttendanceDecision(code='ERROR', camera_mode=mode)
 
     code = str(data.get('result') or 'ERROR')
     recognized_at = data.get('recognized_at')
@@ -78,7 +95,12 @@ def submit_recognized_check_in(student_id: int, confidence: float | None) -> Att
         recognized_at=recognized_at,
         session_id=int(session_id) if isinstance(session_id, int) or (isinstance(session_id, str) and session_id.isdigit()) else None,
         event_id=int(event_id) if isinstance(event_id, int) or (isinstance(event_id, str) and str(event_id).isdigit()) else None,
+        camera_mode=mode,
     )
+
+
+def submit_recognized_check_in(student_id: int, confidence: float | None) -> AttendanceDecision:
+    return submit_recognized_attendance(student_id, confidence, 'ENTRY')
 
 
 def _run_php_cli(payload: dict) -> dict:
@@ -99,7 +121,7 @@ def _run_php_cli(payload: dict) -> dict:
     )
     if completed.returncode != 0:
         logger.warning(
-            'PHP check-in CLI exited %s: %s',
+            'PHP attendance CLI exited %s: %s',
             completed.returncode,
             (completed.stderr or completed.stdout)[:300],
         )
@@ -125,11 +147,11 @@ def _post_http(payload: dict) -> dict:
             raw = response.read().decode('utf-8')
     except HTTPError as exc:
         raw = exc.read().decode('utf-8', errors='replace')
-        logger.warning('PHP check-in HTTP %s', exc.code)
+        logger.warning('PHP attendance HTTP %s', exc.code)
         if not raw:
             return {'result': 'ERROR'}
     except URLError as exc:
-        logger.warning('PHP check-in HTTP unavailable: %s', exc.reason)
+        logger.warning('PHP attendance HTTP unavailable: %s', exc.reason)
         raise
 
     return _parse_json(raw)
@@ -139,6 +161,6 @@ def _parse_json(raw: str) -> dict:
     try:
         data = json.loads(raw)
     except json.JSONDecodeError:
-        logger.warning('PHP check-in returned non-JSON')
+        logger.warning('PHP attendance returned non-JSON')
         return {'result': 'ERROR'}
     return data if isinstance(data, dict) else {'result': 'ERROR'}

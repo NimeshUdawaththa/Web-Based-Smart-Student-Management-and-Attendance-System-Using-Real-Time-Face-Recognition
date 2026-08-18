@@ -32,6 +32,8 @@ $form = [
     'day_of_week' => $isEdit ? (string) $schedule['day_of_week'] : '',
     'start_time' => $isEdit ? format_time_display((string) $schedule['start_time']) : '',
     'end_time' => $isEdit ? format_time_display((string) $schedule['end_time']) : '',
+    'break_start' => $isEdit ? (optional_time_hm(isset($schedule['break_start']) ? (string) $schedule['break_start'] : null) ?? '') : '',
+    'break_end' => $isEdit ? (optional_time_hm(isset($schedule['break_end']) ? (string) $schedule['break_end'] : null) ?? '') : '',
     'room' => $isEdit ? (string) ($schedule['room'] ?? '') : '',
     'status' => $isEdit ? (string) $schedule['status'] : 'ACTIVE',
 ];
@@ -53,6 +55,8 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
         'day_of_week' => $form['day_of_week'],
         'start_time' => $form['start_time'],
         'end_time' => $form['end_time'],
+        'break_start' => $form['break_start'],
+        'break_end' => $form['break_end'],
         'room' => $form['room'],
         'status' => $form['status'],
     ];
@@ -147,6 +151,15 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
             <div class="col-md-3">
                 <label for="end_time" class="form-label">End Time</label>
                 <input type="time" class="form-control" id="end_time" name="end_time" value="<?= e($form['end_time']) ?>" required>
+            </div>
+            <div class="col-md-3">
+                <label for="break_start" class="form-label">Official Break Start</label>
+                <input type="time" class="form-control" id="break_start" name="break_start" value="<?= e($form['break_start']) ?>">
+            </div>
+            <div class="col-md-3">
+                <label for="break_end" class="form-label">Official Break End</label>
+                <input type="time" class="form-control" id="break_end" name="break_end" value="<?= e($form['break_end']) ?>">
+                <div class="form-text">Optional. Must lie inside lecture time.</div>
             </div>
             <div class="col-md-3">
                 <label for="room" class="form-label">Room</label>

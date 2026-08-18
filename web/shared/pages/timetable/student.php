@@ -54,7 +54,10 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
                 <?php else: ?>
                     <?php foreach ($todaySessions as $session): ?>
                         <tr>
-                            <td><?= e(format_time_display($session['scheduled_start']) . ' – ' . format_time_display($session['scheduled_end'])) ?></td>
+                            <td>
+                                <?= e(format_time_display($session['scheduled_start']) . ' – ' . format_time_display($session['scheduled_end'])) ?>
+                                <div class="small text-muted">Break: <?= e(format_break_display($session['break_start'] ?? null, $session['break_end'] ?? null)) ?></div>
+                            </td>
                             <td><?= e($session['module_code'] . ' – ' . $session['module_name']) ?></td>
                             <td><?= e($session['lecturer_first_name'] . ' ' . $session['lecturer_last_name']) ?></td>
                             <td><?= e($session['room'] ?: '-') ?></td>
@@ -94,7 +97,10 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
                     <?php foreach ($upcomingSessions as $session): ?>
                         <tr>
                             <td><?= e($session['session_date']) ?></td>
-                            <td><?= e(format_time_display($session['scheduled_start']) . ' – ' . format_time_display($session['scheduled_end'])) ?></td>
+                            <td>
+                                <?= e(format_time_display($session['scheduled_start']) . ' – ' . format_time_display($session['scheduled_end'])) ?>
+                                <div class="small text-muted">Break: <?= e(format_break_display($session['break_start'] ?? null, $session['break_end'] ?? null)) ?></div>
+                            </td>
                             <td><?= e($session['module_code']) ?></td>
                             <td><?= e($session['lecturer_first_name'] . ' ' . $session['lecturer_last_name']) ?></td>
                             <td><?= e($session['room'] ?: '-') ?></td>
@@ -133,7 +139,10 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
                     <?php foreach ($schedules as $schedule): ?>
                         <tr>
                             <td><?= e(ucfirst(strtolower($schedule['day_of_week']))) ?></td>
-                            <td><?= e(format_time_display($schedule['start_time']) . ' – ' . format_time_display($schedule['end_time'])) ?></td>
+                            <td>
+                                <?= e(format_time_display($schedule['start_time']) . ' – ' . format_time_display($schedule['end_time'])) ?>
+                                <div class="small text-muted">Break: <?= e(format_break_display($schedule['break_start'] ?? null, $schedule['break_end'] ?? null)) ?></div>
+                            </td>
                             <td><?= e($schedule['module_code'] . ' – ' . $schedule['module_name']) ?></td>
                             <td><?= e($schedule['lecturer_first_name'] . ' ' . $schedule['lecturer_last_name']) ?></td>
                             <td><?= e($schedule['room'] ?: '-') ?></td>

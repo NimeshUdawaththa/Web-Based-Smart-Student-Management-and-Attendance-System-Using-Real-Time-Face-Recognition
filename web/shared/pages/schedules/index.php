@@ -93,6 +93,7 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
                 <tr>
                     <th>Day</th>
                     <th>Time</th>
+                    <th>Break</th>
                     <th>Module</th>
                     <th>Batch</th>
                     <th>Lecturer</th>
@@ -105,12 +106,13 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
             </thead>
             <tbody>
                 <?php if ($schedules === []): ?>
-                    <tr><td colspan="<?= $readOnly ? 7 : 8 ?>" class="text-center text-muted py-4">No timetable entries found.</td></tr>
+                    <tr><td colspan="<?= $readOnly ? 8 : 9 ?>" class="text-center text-muted py-4">No timetable entries found.</td></tr>
                 <?php else: ?>
                     <?php foreach ($schedules as $schedule): ?>
                         <tr>
                             <td><?= e(ucfirst(strtolower($schedule['day_of_week']))) ?></td>
                             <td><?= e(format_time_display($schedule['start_time']) . ' – ' . format_time_display($schedule['end_time'])) ?></td>
+                            <td><?= e(format_break_display($schedule['break_start'] ?? null, $schedule['break_end'] ?? null)) ?></td>
                             <td><?= e($schedule['module_code']) ?></td>
                             <td><?= e($schedule['batch_name']) ?></td>
                             <td><?= e($schedule['lecturer_first_name'] . ' ' . $schedule['lecturer_last_name']) ?></td>

@@ -53,4 +53,6 @@ INTERNAL_API_TOKEN = os.getenv('INTERNAL_API_TOKEN', '')
 PHP_CLI_PATH = os.getenv('PHP_CLI_PATH', r'C:\xampp\php\php.exe')
 ATTENDANCE_BRIDGE = os.getenv('ATTENDANCE_BRIDGE', 'cli').strip().lower()
 ATTENDANCE_CAMERA_ID = os.getenv('ATTENDANCE_CAMERA_ID', f'webcam-{CAMERA_INDEX}')
+_CAMERA_MODE = (os.getenv('ATTENDANCE_CAMERA_MODE', 'ENTRY') or 'ENTRY').strip().upper()
+ATTENDANCE_CAMERA_MODE = _CAMERA_MODE if _CAMERA_MODE in {'ENTRY', 'EXIT'} else 'ENTRY'
 ATTENDANCE_TIMEOUT_SECONDS = float(os.getenv('ATTENDANCE_TIMEOUT_SECONDS', '4'))

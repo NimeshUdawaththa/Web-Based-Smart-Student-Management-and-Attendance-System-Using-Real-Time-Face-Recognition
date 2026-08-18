@@ -990,9 +990,9 @@ function management_nav_items(string $role): array
 function status_badge_class(string $status): string
 {
     return match ($status) {
-        'ACTIVE', 'ENROLLED', 'IN_PROGRESS' => 'text-bg-success',
+        'ACTIVE', 'ENROLLED', 'IN_PROGRESS', 'PROMOTED' => 'text-bg-success',
         'INACTIVE', 'NOT ENROLLED', 'COMPLETED' => 'text-bg-secondary',
-        'SCHEDULED' => 'text-bg-primary',
+        'SCHEDULED', 'OPEN' => 'text-bg-primary',
         'SUSPENDED', 'DROPPED' => 'text-bg-warning',
         'CANCELLED' => 'text-bg-danger',
         'GRADUATED' => 'text-bg-info',
