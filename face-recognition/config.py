@@ -34,3 +34,15 @@ CAMERA_INDEX = 0
 # --- Storage paths ---
 DATASET_DIR = BASE_DIR / 'dataset'
 ENCODINGS_DIR = BASE_DIR / 'encodings'
+
+# --- Recognition (direct embedding matching; no KNN/SVM) ---
+# dlib/face_recognition default compare tolerance is 0.6. A slightly stricter
+# student-level threshold reduces false IDs before attendance is added later.
+MATCH_THRESHOLD = float(os.getenv('FACE_MATCH_THRESHOLD', '0.50'))
+# Average of the best K gallery distances per student (see matcher.py).
+MATCH_K = max(1, int(os.getenv('FACE_MATCH_K', '3')))
+RECOGNITION_FRAME_SCALE = float(os.getenv('FACE_FRAME_SCALE', '0.25'))
+PROCESS_EVERY_N_FRAMES = int(os.getenv('FACE_PROCESS_EVERY_N', '2'))
+RECOGNITION_COOLDOWN_SECONDS = float(os.getenv('FACE_RECOGNITION_COOLDOWN', '5.0'))
+FACE_DETECTION_MODEL = os.getenv('FACE_DETECTION_MODEL', 'hog')  # CPU only
+UNKNOWN_LABEL = 'UNKNOWN'

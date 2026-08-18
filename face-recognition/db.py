@@ -35,6 +35,28 @@ def get_student_by_id(student_id: int) -> dict | None:
         conn.close()
 
 
+def list_active_face_profiles() -> list[dict]:
+    """
+    Return ACTIVE face profiles joined with authoritative student identity.
+    Encoding files are not loaded here.
+    """
+    conn = get_connection()
+    try:
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute(
+            "SELECT fp.face_profile_id, fp.student_id, fp.encoding_path, fp.sample_count, "
+            "fp.enrolled_at, fp.last_updated, fp.status AS face_status, "
+            "s.registration_no, s.first_name, s.last_name, s.status AS student_status "
+            "FROM face_profiles fp "
+            "INNER JOIN students s ON s.student_id = fp.student_id "
+            "WHERE fp.status = 'ACTIVE' "
+            "ORDER BY fp.student_id ASC"
+        )
+        return list(cursor.fetchall())
+    finally:
+        conn.close()
+
+
 def get_face_profile(student_id: int) -> dict | None:
     """Fetch existing face profile for a student."""
     conn = get_connection()
