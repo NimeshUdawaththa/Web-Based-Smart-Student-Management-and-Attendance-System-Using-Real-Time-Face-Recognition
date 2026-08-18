@@ -171,6 +171,7 @@ function sync_scheduled_session_states(bool $force = false): array
     $opened = 0;
     $closed = 0;
     $expired = 0;
+    $justCompleted = [];
     $ownsTransaction = false;
     $pdo = db();
 
@@ -215,6 +216,9 @@ function sync_scheduled_session_states(bool $force = false): array
                 'session_id' => $row['session_id'],
             ]);
             $closed += $complete->rowCount();
+            if ($complete->rowCount() > 0) {
+                $justCompleted[] = (int) $row['session_id'];
+            }
         }
 
         foreach ($rows as $row) {
@@ -321,6 +325,10 @@ function sync_scheduled_session_states(bool $force = false): array
         }
 
         cancel_open_early_pending_for_terminal_sessions($pdo);
+
+        foreach ($justCompleted as $completedId) {
+            finalize_session_attendance($completedId);
+        }
 
         if ($ownsTransaction) {
             $pdo->commit();
@@ -1684,6 +1692,7 @@ function complete_lecture_session(int $sessionId): void
         'session_id' => $sessionId,
     ]);
     cancel_open_early_pending_for_session(db(), $sessionId);
+    finalize_session_attendance($sessionId);
 }
 
 function cancel_lecture_session(int $sessionId): void
@@ -1716,14 +1725,17 @@ function cancel_lecture_session(int $sessionId): void
     cancel_open_early_pending_for_session(db(), $sessionId);
 }
 
-function is_student_eligible_for_session(int $studentId, int $sessionId): bool
+function is_student_eligible_for_session(int $studentId, int $sessionId, bool $allowCompleted = false): bool
 {
     $session = get_lecture_session($sessionId);
     if ($session === null) {
         return false;
     }
 
-    if (in_array($session['status'], ['CANCELLED', 'COMPLETED'], true)) {
+    if ($session['status'] === 'CANCELLED') {
+        return false;
+    }
+    if ($session['status'] === 'COMPLETED' && !$allowCompleted) {
         return false;
     }
 
@@ -1748,10 +1760,14 @@ function is_student_eligible_for_session(int $studentId, int $sessionId): bool
 /**
  * @return list<array<string, mixed>>
  */
-function list_eligible_students_for_session(int $sessionId): array
+function list_eligible_students_for_session(int $sessionId, bool $forFinalization = false): array
 {
     $session = get_lecture_session($sessionId);
-    if ($session === null || in_array($session['status'], ['CANCELLED', 'COMPLETED'], true)) {
+    if ($session === null || $session['status'] === 'CANCELLED') {
+        return [];
+    }
+
+    if (!$forFinalization && $session['status'] === 'COMPLETED') {
         return [];
     }
 

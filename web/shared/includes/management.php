@@ -980,6 +980,7 @@ function management_nav_items(string $role): array
         'STUDENT' => [
             ['label' => 'Dashboard', 'href' => app_url('student/dashboard.php')],
             ['label' => 'My Timetable', 'href' => app_url('student/timetable.php')],
+            ['label' => 'My Attendance', 'href' => app_url('student/attendance.php')],
         ],
         default => [
             ['label' => 'Dashboard', 'href' => app_url(role_dashboard_path($role))],
@@ -990,11 +991,11 @@ function management_nav_items(string $role): array
 function status_badge_class(string $status): string
 {
     return match ($status) {
-        'ACTIVE', 'ENROLLED', 'IN_PROGRESS', 'PROMOTED' => 'text-bg-success',
+        'ACTIVE', 'ENROLLED', 'IN_PROGRESS', 'PROMOTED', 'PRESENT' => 'text-bg-success',
         'INACTIVE', 'NOT ENROLLED', 'COMPLETED' => 'text-bg-secondary',
         'SCHEDULED', 'OPEN' => 'text-bg-primary',
-        'SUSPENDED', 'DROPPED' => 'text-bg-warning',
-        'CANCELLED' => 'text-bg-danger',
+        'SUSPENDED', 'DROPPED', 'LATE' => 'text-bg-warning',
+        'CANCELLED', 'ABSENT' => 'text-bg-danger',
         'GRADUATED' => 'text-bg-info',
         default => 'text-bg-light',
     };

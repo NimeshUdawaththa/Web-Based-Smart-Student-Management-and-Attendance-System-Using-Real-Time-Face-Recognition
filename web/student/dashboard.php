@@ -57,6 +57,15 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
                 </div>
             </div>
         </div>
+        <div class="col-md-6 col-lg-4">
+            <div class="card shadow-sm h-100">
+                <div class="card-body">
+                    <h2 class="h5">My Attendance</h2>
+                    <p class="text-muted">Final attendance for lectures you were eligible to attend.</p>
+                    <a href="<?= e(app_url('student/attendance.php')) ?>" class="btn btn-outline-primary btn-sm">Open</a>
+                </div>
+            </div>
+        </div>
     </div>
 <?php endif; ?>
 

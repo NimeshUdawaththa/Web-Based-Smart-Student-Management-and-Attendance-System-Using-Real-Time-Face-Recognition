@@ -33,7 +33,10 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
             set_flash('success', 'Lecture session started. Status is IN_PROGRESS.');
         } elseif ($action === 'complete') {
             complete_lecture_session($sessionId);
-            set_flash('success', 'Lecture session completed.');
+            set_flash('success', 'Lecture session completed. Final attendance has been processed.');
+        } elseif ($action === 'finalize_attendance') {
+            $stats = finalize_session_attendance_authorized($sessionId);
+            set_flash('success', 'Attendance recalculated for ' . $stats['finalized'] . ' student(s).');
         } elseif ($action === 'cancel') {
             cancel_lecture_session($sessionId);
             set_flash('success', 'Lecture session cancelled.');
@@ -69,17 +72,20 @@ $pageTitle = $session['module_code'] . ' – ' . $session['session_date'];
 $canControl = user_can_control_session($session);
 $lifecycleNote = session_lifecycle_note($session);
 
-$eligibleStudents = list_eligible_students_for_session($sessionId);
+$eligibleStudents = list_eligible_students_for_session($sessionId, $session['status'] === 'COMPLETED');
 $lateThreshold = late_threshold_time((string) $session['scheduled_start'], (int) $session['late_after_minutes']);
 $sessionEvents = list_session_attendance_events($sessionId);
 $sessionPending = list_session_early_pending($sessionId);
+$finalRecords = $session['status'] === 'COMPLETED' ? list_session_attendance_records($sessionId) : [];
 $attendancePreviews = [];
-foreach ($eligibleStudents as $student) {
-    $attendancePreviews[] = calculate_session_attendance_preview($session, (int) $student['student_id']) + [
-        'registration_no' => $student['registration_no'],
-        'first_name' => $student['first_name'],
-        'last_name' => $student['last_name'],
-    ];
+if ($session['status'] !== 'COMPLETED') {
+    foreach ($eligibleStudents as $student) {
+        $attendancePreviews[] = calculate_session_attendance_preview($session, (int) $student['student_id']) + [
+            'registration_no' => $student['registration_no'],
+            'first_name' => $student['first_name'],
+            'last_name' => $student['last_name'],
+        ];
+    }
 }
 $breakStartValue = optional_time_hm(isset($session['break_start']) ? (string) $session['break_start'] : null) ?? '';
 $breakEndValue = optional_time_hm(isset($session['break_end']) ? (string) $session['break_end'] : null) ?? '';
@@ -128,6 +134,14 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
                         <button type="submit" class="btn btn-primary">Stop / Complete</button>
                     </form>
                 <?php endif; ?>
+                <?php if ($canControl && $session['status'] === 'COMPLETED'): ?>
+                    <form method="post">
+                        <?= csrf_field() ?>
+                        <input type="hidden" name="session_id" value="<?= e((string) $sessionId) ?>">
+                        <input type="hidden" name="action" value="finalize_attendance">
+                        <button type="submit" class="btn btn-outline-primary">Recalculate / Finalize Attendance</button>
+                    </form>
+                <?php endif; ?>
                 <?php if ($canManage && in_array($session['status'], ['SCHEDULED', 'IN_PROGRESS'], true)): ?>
                     <form method="post" onsubmit="return confirm('Cancel this lecture session?');">
                         <?= csrf_field() ?>
@@ -173,9 +187,9 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
     </div>
 <?php endif; ?>
 
-<div class="card shadow-sm mb-4">
+<div class="card shadow-sm mb-4" id="attendance-audit">
     <div class="card-header bg-white d-flex justify-content-between align-items-center">
-        <h2 class="h6 mb-0">Attendance events (audit)</h2>
+        <h2 class="h6 mb-0">Event audit (raw IN/OUT)</h2>
         <span class="badge text-bg-secondary"><?= count($sessionEvents) ?></span>
     </div>
     <div class="table-responsive">
@@ -251,6 +265,58 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
     </div>
 <?php endif; ?>
 
+<?php if ($session['status'] === 'COMPLETED'): ?>
+    <div class="card shadow-sm mb-4">
+        <div class="card-header bg-white d-flex justify-content-between align-items-center">
+            <h2 class="h6 mb-0">Final attendance</h2>
+            <span class="badge text-bg-secondary"><?= count($finalRecords) ?></span>
+        </div>
+        <div class="card-body py-2">
+            <p class="small text-muted mb-0">
+                One record per eligible student. Teaching time excludes the official break.
+                Manual early stop uses the actual end as the teaching end. Raw IN/OUT stays in Event audit.
+            </p>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-sm mb-0 align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th>Reg No</th>
+                        <th>Student</th>
+                        <th>First In</th>
+                        <th>Last Out</th>
+                        <th>Attended</th>
+                        <th>Teaching Time</th>
+                        <th>Attendance %</th>
+                        <th>Status</th>
+                        <th>Left Early</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php if ($finalRecords === []): ?>
+                        <tr><td colspan="10" class="text-center text-muted py-3">No final attendance yet. Use Recalculate / Finalize Attendance.</td></tr>
+                    <?php else: ?>
+                        <?php foreach ($finalRecords as $record): ?>
+                            <tr>
+                                <td><?= e((string) $record['registration_no']) ?></td>
+                                <td><?= e($record['first_name'] . ' ' . $record['last_name']) ?></td>
+                                <td><?= e($record['first_entry'] ?: '—') ?></td>
+                                <td><?= e($record['last_exit'] ?: '—') ?></td>
+                                <td><?= e((string) $record['total_present_minutes']) ?> min</td>
+                                <td><?= e((string) $record['teaching_minutes']) ?> min</td>
+                                <td><?= e(number_format((float) $record['attendance_percent'], 2)) ?>%</td>
+                                <td><span class="badge <?= e(status_badge_class((string) $record['status'])) ?>"><?= e((string) $record['status']) ?></span></td>
+                                <td><?= (int) $record['left_early'] === 1 ? 'Yes' : 'No' ?></td>
+                                <td><a class="small" href="#attendance-audit">View Audit</a></td>
+                            </tr>
+                        <?php endforeach; ?>
+                    <?php endif; ?>
+                </tbody>
+            </table>
+        </div>
+    </div>
+<?php else: ?>
 <div class="card shadow-sm mb-4">
     <div class="card-header bg-white">
         <h2 class="h6 mb-0">Teaching-time preview</h2>
@@ -311,6 +377,7 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
         </table>
     </div>
 </div>
+<?php endif; ?>
 
 <div class="card shadow-sm">
     <div class="card-header bg-white d-flex justify-content-between align-items-center">

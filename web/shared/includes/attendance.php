@@ -5,8 +5,8 @@ declare(strict_types=1);
 /**
  * State-based attendance engine.
  *
- * PHP is authoritative. Does not write attendance_records or finalize
- * PRESENT / LATE / ABSENT / LEFT EARLY. Preview helpers only.
+ * Raw IN/OUT lives in attendance_events. Final PRESENT/LATE/ABSENT
+ * snapshots are written to attendance_records when a session is COMPLETED.
  */
 
 if (!defined('APP_STARTED')) {
@@ -22,6 +22,16 @@ function early_arrival_minutes(): int
 function min_attendance_percent(): float
 {
     return max(0.0, min(100.0, (float) (env('MIN_ATTENDANCE_PERCENT', '75') ?? '75')));
+}
+
+function left_early_tolerance_minutes(): int
+{
+    return max(0, (int) (env('LEFT_EARLY_TOLERANCE_MINUTES', '5') ?? '5'));
+}
+
+function post_session_exit_capture_minutes(): int
+{
+    return max(0, (int) (env('POST_SESSION_EXIT_CAPTURE_MINUTES', '10') ?? '10'));
 }
 
 function optional_time_hm(?string $value): ?string
@@ -379,8 +389,22 @@ function resolve_attendance_session_for_student(int $studentId): array
     $today = $now->format('Y-m-d');
     $candidates = [];
     $tooEarly = [];
+    $postSession = [];
     foreach (list_lecture_sessions(['from' => $today, 'to' => $today]) as $session) {
-        if (!in_array($session['status'], ['SCHEDULED', 'IN_PROGRESS'], true)) {
+        $status = (string) ($session['status'] ?? '');
+        if ($status === 'CANCELLED') {
+            continue;
+        }
+        if ($status === 'COMPLETED') {
+            if (!is_student_eligible_for_session($studentId, (int) $session['session_id'], true)) {
+                continue;
+            }
+            if (session_in_post_session_exit_window($session, $now)) {
+                $postSession[] = $session;
+            }
+            continue;
+        }
+        if (!in_array($status, ['SCHEDULED', 'IN_PROGRESS'], true)) {
             continue;
         }
         if (!is_student_eligible_for_session($studentId, (int) $session['session_id'])) {
@@ -402,6 +426,10 @@ function resolve_attendance_session_for_student(int $studentId): array
         }
         $session['_window'] = $now < $start ? 'pending' : 'open';
         $candidates[] = $session;
+    }
+
+    if ($candidates === [] && $postSession !== []) {
+        $candidates = $postSession;
     }
 
     if ($candidates === [] && $tooEarly !== []) {
@@ -478,6 +506,9 @@ function public_attendance_result(array $resolution): array
  * - At/after scheduled start, lifecycle sync promotes pending inside → one IN
  *   with recognized_at = scheduled_start. Live recognitions then use the
  *   existing IN/OUT/re-entry engine.
+ * - After COMPLETED, EXIT only is accepted for POST_SESSION_EXIT_CAPTURE_MINUTES
+ *   for students still inside at effective teaching end. Timestamp is real.
+ *   Final teaching-time calculations still clip at effective teaching end.
  *
  * @return array<string, mixed>
  */
@@ -534,6 +565,10 @@ function record_face_attendance_event(
             $session = $freshAfterStart;
         }
         $now = app_now();
+    }
+
+    if (($session['status'] ?? '') === 'COMPLETED') {
+        return record_post_session_exit_event($base, $studentId, $session, $mode, $confidence, $camera, $now);
     }
 
     if ($session['status'] !== 'IN_PROGRESS') {
@@ -654,6 +689,161 @@ function record_face_attendance_event(
 }
 
 /**
+ * Audit-only EXIT after teaching end.
+ * Inserts attendance_events.OUT and copies that timestamp onto
+ * attendance_records.last_exit. Teaching-time fields are not changed.
+ *
+ * @param array<string, mixed> $base
+ * @param array<string, mixed> $session
+ * @return array<string, mixed>
+ */
+function record_post_session_exit_event(
+    array $base,
+    int $studentId,
+    array $session,
+    string $mode,
+    float $confidence,
+    ?string $cameraId,
+    DateTimeImmutable $now
+): array {
+    $sessionId = (int) $session['session_id'];
+    $effectiveEnd = session_effective_teaching_end($session);
+    if (($session['status'] ?? '') !== 'COMPLETED' || !$effectiveEnd instanceof DateTimeImmutable) {
+        return $base + ['result' => 'NO_ACTIVE_SESSION'];
+    }
+    if ($mode !== 'EXIT' || $now <= $effectiveEnd || !session_in_post_session_exit_window($session, $now)) {
+        return $base + ['result' => 'NO_ACTIVE_SESSION'];
+    }
+
+    $lockName = sprintf('att_evt_%d_%d', $studentId, $sessionId);
+    $pdo = db();
+    $lockAcquired = false;
+
+    try {
+        $lockStatement = $pdo->prepare('SELECT GET_LOCK(:lock_name, 5)');
+        $lockStatement->execute(['lock_name' => $lockName]);
+        $lockAcquired = (int) $lockStatement->fetchColumn() === 1;
+        $lockStatement->closeCursor();
+        if (!$lockAcquired) {
+            error_log('Could not acquire post-session exit lock for student_id=' . $studentId . ' session_id=' . $sessionId);
+            return $base + ['result' => 'ERROR'];
+        }
+
+        $pdo->beginTransaction();
+
+        $statusLock = $pdo->prepare(
+            "SELECT session_id, status, session_date, scheduled_start, scheduled_end, actual_end
+             FROM lecture_sessions
+             WHERE session_id = :session_id
+             FOR UPDATE"
+        );
+        $statusLock->execute(['session_id' => $sessionId]);
+        $lockedSession = $statusLock->fetch();
+        $statusLock->closeCursor();
+        if ($lockedSession === false || $lockedSession['status'] !== 'COMPLETED') {
+            $pdo->rollBack();
+            return $base + ['result' => 'NO_ACTIVE_SESSION'];
+        }
+        $lockedSession['actual_end'] = $lockedSession['actual_end'] ?? $session['actual_end'] ?? null;
+        $end = session_effective_teaching_end($lockedSession) ?? $effectiveEnd;
+        if ($now <= $end || $now > $end->modify('+' . post_session_exit_capture_minutes() . ' minutes')) {
+            $pdo->rollBack();
+            return $base + ['result' => 'NO_ACTIVE_SESSION'];
+        }
+
+        if (!is_student_eligible_for_session($studentId, $sessionId, true)) {
+            $pdo->rollBack();
+            return $base + ['result' => 'NOT_ELIGIBLE'];
+        }
+
+        $lastStatement = $pdo->prepare(
+            "SELECT event_id, event_type, recognized_at FROM attendance_events
+             WHERE student_id = :student_id AND session_id = :session_id
+             ORDER BY recognized_at DESC, event_id DESC
+             LIMIT 1
+             FOR UPDATE"
+        );
+        $lastStatement->execute([
+            'student_id' => $studentId,
+            'session_id' => $sessionId,
+        ]);
+        $last = $lastStatement->fetch();
+        $lastType = is_array($last) ? (string) $last['event_type'] : null;
+        $insideAtEnd = $lastType === 'IN';
+
+        $postOut = $pdo->prepare(
+            "SELECT event_id, recognized_at FROM attendance_events
+             WHERE student_id = :student_id AND session_id = :session_id
+               AND event_type = 'OUT' AND recognized_at > :effective_end
+             ORDER BY recognized_at ASC, event_id ASC
+             LIMIT 1"
+        );
+        $postOut->execute([
+            'student_id' => $studentId,
+            'session_id' => $sessionId,
+            'effective_end' => $end->format('Y-m-d H:i:s'),
+        ]);
+        $existingPostOut = $postOut->fetch();
+        $postOut->closeCursor();
+
+        if (!$insideAtEnd || $existingPostOut !== false) {
+            $source = $existingPostOut !== false ? $existingPostOut : (is_array($last) ? $last : null);
+            $pdo->commit();
+            return $base + [
+                'result' => 'ALREADY_OUTSIDE',
+                'event_id' => is_array($source) ? (int) $source['event_id'] : null,
+                'recognized_at' => is_array($source) ? (string) $source['recognized_at'] : null,
+            ];
+        }
+
+        $insert = $pdo->prepare(
+            "INSERT INTO attendance_events
+                (student_id, session_id, event_type, recognized_at, confidence, camera_id)
+             VALUES
+                (:student_id, :session_id, 'OUT', :recognized_at, :confidence, :camera_id)"
+        );
+        $insert->execute([
+            'student_id' => $studentId,
+            'session_id' => $sessionId,
+            'recognized_at' => $now->format('Y-m-d H:i:s'),
+            'confidence' => $confidence,
+            'camera_id' => $cameraId,
+        ]);
+        $eventId = (int) $pdo->lastInsertId();
+        $pdo->prepare(
+            'UPDATE attendance_records
+             SET last_exit = :last_exit
+             WHERE student_id = :student_id AND session_id = :session_id'
+        )->execute([
+            'last_exit' => $now->format('Y-m-d H:i:s'),
+            'student_id' => $studentId,
+            'session_id' => $sessionId,
+        ]);
+        $pdo->commit();
+
+        return $base + [
+            'result' => 'CHECKED_OUT',
+            'event_id' => $eventId,
+            'event_type' => 'OUT',
+            'recognized_at' => $now->format('Y-m-d H:i:s'),
+            'confidence' => $confidence,
+        ];
+    } catch (Throwable $exception) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        error_log('Post-session exit failed for student_id=' . $studentId . ': ' . $exception->getMessage());
+        return $base + ['result' => 'ERROR'];
+    } finally {
+        if ($lockAcquired) {
+            $release = $pdo->prepare('SELECT RELEASE_LOCK(:lock_name)');
+            $release->execute(['lock_name' => $lockName]);
+            $release->closeCursor();
+        }
+    }
+}
+
+/**
  * Persist door ENTRY/EXIT inside the early-arrival window. No attendance_events.
  *
  * @param array<string, mixed> $base
@@ -750,11 +940,17 @@ function record_face_check_in(int $studentId, float $confidence, ?string $camera
 /**
  * @return list<array{0: DateTimeImmutable, 1: DateTimeImmutable}>
  */
-function teaching_intervals_for_session(array $session): array
+function teaching_intervals_for_session(array $session, ?DateTimeImmutable $clipEnd = null): array
 {
     $start = session_scheduled_datetime($session, 'start');
     $end = session_scheduled_datetime($session, 'end');
     if (!$start instanceof DateTimeImmutable || !$end instanceof DateTimeImmutable || $end <= $start) {
+        return [];
+    }
+    if ($clipEnd instanceof DateTimeImmutable && $clipEnd < $end) {
+        $end = $clipEnd;
+    }
+    if ($end <= $start) {
         return [];
     }
 
@@ -765,13 +961,14 @@ function teaching_intervals_for_session(array $session): array
         && $breakEnd instanceof DateTimeImmutable
         && $breakEnd > $breakStart
         && $breakStart >= $start
-        && $breakEnd <= $end
+        && $breakStart < $end
     ) {
         $intervals = [];
         if ($breakStart > $start) {
             $intervals[] = [$start, $breakStart];
         }
-        if ($end > $breakEnd) {
+        $afterBreak = $breakEnd < $end ? $breakEnd : $end;
+        if ($end > $afterBreak && $breakEnd < $end) {
             $intervals[] = [$breakEnd, $end];
         }
 
@@ -794,6 +991,9 @@ function presence_intervals_from_events(array $events, DateTimeImmutable $clipEn
     foreach ($events as $event) {
         $at = parse_app_datetime(isset($event['recognized_at']) ? (string) $event['recognized_at'] : null);
         if (!$at instanceof DateTimeImmutable) {
+            continue;
+        }
+        if ($at > $clipEnd) {
             continue;
         }
         $type = (string) ($event['event_type'] ?? '');
@@ -861,95 +1061,315 @@ function datetime_intervals_minutes(array $intervals): int
  * @param list<array<string, mixed>>|null $events
  * @return array<string, mixed>
  */
-function calculate_session_attendance_preview(array $session, int $studentId, ?array $events = null, ?DateTimeImmutable $now = null): array
+function session_effective_teaching_end(array $session): ?DateTimeImmutable
 {
-    $now = $now ?? app_now();
-    $start = session_scheduled_datetime($session, 'start');
-    $end = session_scheduled_datetime($session, 'end');
-    $lateAt = session_late_threshold_datetime($session);
-    $breakStart = session_break_start_datetime($session);
-    $breakEnd = session_break_end_datetime($session);
-    $events = $events ?? list_attendance_events_for_student_session($studentId, (int) $session['session_id']);
-
-    $teaching = teaching_intervals_for_session($session);
-    $teachingMinutes = datetime_intervals_minutes($teaching);
-    $breakMinutes = 0;
-    if ($breakStart instanceof DateTimeImmutable && $breakEnd instanceof DateTimeImmutable && $breakEnd > $breakStart) {
-        $breakMinutes = (int) floor(($breakEnd->getTimestamp() - $breakStart->getTimestamp()) / 60);
+    $scheduledEnd = session_scheduled_datetime($session, 'end');
+    if (!$scheduledEnd instanceof DateTimeImmutable) {
+        return null;
+    }
+    $actualEnd = parse_app_datetime(isset($session['actual_end']) ? (string) $session['actual_end'] : null);
+    if ($actualEnd instanceof DateTimeImmutable && $actualEnd < $scheduledEnd) {
+        return $actualEnd;
     }
 
-    $clipEnd = $end instanceof DateTimeImmutable
-        ? ($now < $end ? $now : $end)
-        : $now;
+    return $scheduledEnd;
+}
+
+function session_in_post_session_exit_window(array $session, DateTimeImmutable $now): bool
+{
+    if (($session['status'] ?? '') !== 'COMPLETED') {
+        return false;
+    }
+    $end = session_effective_teaching_end($session);
+    if (!$end instanceof DateTimeImmutable) {
+        return false;
+    }
+    if ($now <= $end) {
+        return false;
+    }
+    $captureEnd = $end->modify('+' . post_session_exit_capture_minutes() . ' minutes');
+
+    return $now <= $captureEnd;
+}
+
+/**
+ * Compute teaching-time attendance clipped at $clipEnd.
+ * Events after $clipEnd stay in attendance_events but do not add minutes.
+ *
+ * @param list<array<string, mixed>>|null $events
+ * @return array<string, mixed>
+ */
+function compute_student_session_attendance(
+    array $session,
+    int $studentId,
+    ?array $events,
+    DateTimeImmutable $clipEnd
+): array {
+    $start = session_scheduled_datetime($session, 'start');
+    $scheduledEnd = session_scheduled_datetime($session, 'end');
+    $lateAt = session_late_threshold_datetime($session);
+    $events = $events ?? list_attendance_events_for_student_session($studentId, (int) $session['session_id']);
+
+    $teaching = teaching_intervals_for_session($session, $clipEnd);
+    $teachingMinutes = datetime_intervals_minutes($teaching);
     $presence = presence_intervals_from_events($events, $clipEnd);
-    $attendedIntervals = intersect_datetime_intervals($presence, $teaching);
-    $attended = datetime_intervals_minutes($attendedIntervals);
-    $physical = datetime_intervals_minutes($presence);
-    $missed = max(0, $teachingMinutes - $attended);
-    $percent = $teachingMinutes > 0 ? round(($attended / $teachingMinutes) * 100, 1) : 0.0;
+    $attended = datetime_intervals_minutes(intersect_datetime_intervals($presence, $teaching));
+    $percent = $teachingMinutes > 0 ? round(($attended / $teachingMinutes) * 100, 2) : 0.0;
 
     $firstIn = null;
-    $lastOut = null;
+    $lastOutInWindow = null;
+    $lastDisplayOut = null;
+    $insideAtEnd = false;
     foreach ($events as $event) {
         $at = parse_app_datetime(isset($event['recognized_at']) ? (string) $event['recognized_at'] : null);
         if (!$at instanceof DateTimeImmutable) {
             continue;
         }
-        if (($event['event_type'] ?? '') === 'IN' && $firstIn === null) {
-            $firstIn = $at;
+        $type = (string) ($event['event_type'] ?? '');
+        if ($type === 'OUT') {
+            $lastDisplayOut = $at;
+        } elseif ($type === 'IN') {
+            $lastDisplayOut = null;
         }
-        if (($event['event_type'] ?? '') === 'OUT') {
-            $lastOut = $at;
+        if ($at > $clipEnd) {
+            continue;
+        }
+        if ($type === 'IN') {
+            if ($firstIn === null) {
+                $firstIn = $at;
+            }
+            $insideAtEnd = true;
+        } elseif ($type === 'OUT') {
+            $lastOutInWindow = $at;
+            $insideAtEnd = false;
         }
     }
-
-    $presenceState = student_session_presence_from_events($events);
-    $inside = (bool) $presenceState['inside'];
 
     $onTime = false;
     $late = false;
+    $lateMinutes = 0;
     if ($firstIn instanceof DateTimeImmutable && $lateAt instanceof DateTimeImmutable) {
         $onTime = $firstIn <= $lateAt;
         $late = $firstIn > $lateAt;
-    }
-
-    $leftEarly = false;
-    if ($firstIn instanceof DateTimeImmutable && !$inside && $lastOut instanceof DateTimeImmutable && $end instanceof DateTimeImmutable && $lastOut < $end) {
-        $duringBreak = $breakStart instanceof DateTimeImmutable
-            && $breakEnd instanceof DateTimeImmutable
-            && $lastOut >= $breakStart
-            && $lastOut < $breakEnd;
-        if ($duringBreak) {
-            $leftEarly = $now >= $breakEnd;
-        } else {
-            $leftEarly = true;
+        if ($late) {
+            $lateMinutes = (int) floor(($firstIn->getTimestamp() - $lateAt->getTimestamp()) / 60);
         }
     }
 
-    $absent = $firstIn === null || $percent < min_attendance_percent();
+    $leftEarly = false;
+    if ($firstIn instanceof DateTimeImmutable && !$insideAtEnd && $lastOutInWindow instanceof DateTimeImmutable) {
+        $toleranceEnd = $clipEnd->modify('-' . left_early_tolerance_minutes() . ' minutes');
+        $leftEarly = $lastOutInWindow < $toleranceEnd;
+    }
+
+    $meetsMinimum = $firstIn instanceof DateTimeImmutable && $percent >= min_attendance_percent();
+    if (!$meetsMinimum) {
+        $status = 'ABSENT';
+    } elseif ($onTime) {
+        $status = 'PRESENT';
+    } else {
+        $status = 'LATE';
+    }
+
+    $breakStart = session_break_start_datetime($session);
+    $breakEnd = session_break_end_datetime($session);
+    $breakMinutes = 0;
+    if ($breakStart instanceof DateTimeImmutable && $breakEnd instanceof DateTimeImmutable && $breakEnd > $breakStart) {
+        $breakMinutes = (int) floor(($breakEnd->getTimestamp() - $breakStart->getTimestamp()) / 60);
+    }
 
     return [
         'student_id' => $studentId,
         'session_id' => (int) ($session['session_id'] ?? 0),
         'first_official_entry' => $firstIn?->format('Y-m-d H:i:s'),
-        'last_exit' => $lastOut?->format('Y-m-d H:i:s'),
-        'currently_inside' => $inside,
-        'lecture_minutes' => ($start instanceof DateTimeImmutable && $end instanceof DateTimeImmutable)
-            ? (int) floor(($end->getTimestamp() - $start->getTimestamp()) / 60)
+        'last_exit' => $lastDisplayOut?->format('Y-m-d H:i:s'),
+        'currently_inside' => $insideAtEnd,
+        'lecture_minutes' => ($start instanceof DateTimeImmutable && $scheduledEnd instanceof DateTimeImmutable)
+            ? (int) floor(($scheduledEnd->getTimestamp() - $start->getTimestamp()) / 60)
             : 0,
         'official_break_minutes' => $breakMinutes,
         'teaching_minutes' => $teachingMinutes,
-        'physical_inside_minutes' => $physical,
         'attended_teaching_minutes' => $attended,
-        'missed_teaching_minutes' => $missed,
+        'missed_teaching_minutes' => max(0, $teachingMinutes - $attended),
         'attendance_percent' => $percent,
         'min_attendance_percent' => min_attendance_percent(),
+        'status' => $status,
+        'late_minutes' => $lateMinutes,
+        'left_early' => $leftEarly,
         'preview_on_time_candidate' => $onTime,
         'preview_late_candidate' => $late,
         'preview_left_early_candidate' => $leftEarly,
-        'preview_absent_candidate' => $absent,
-        'final_status_applied' => false,
+        'preview_absent_candidate' => $status === 'ABSENT',
     ];
+}
+
+/**
+ * Live preview while a lecture is still running. Does not persist attendance_records.
+ *
+ * @param list<array<string, mixed>>|null $events
+ * @return array<string, mixed>
+ */
+function calculate_session_attendance_preview(array $session, int $studentId, ?array $events = null, ?DateTimeImmutable $now = null): array
+{
+    $now = $now ?? app_now();
+    $scheduledEnd = session_scheduled_datetime($session, 'end');
+    $clipEnd = $scheduledEnd instanceof DateTimeImmutable && $now < $scheduledEnd ? $now : ($scheduledEnd ?? $now);
+    $computed = compute_student_session_attendance($session, $studentId, $events, $clipEnd);
+    $computed['final_status_applied'] = false;
+
+    return $computed;
+}
+
+/**
+ * @return array{finalized: int, skipped: int}
+ */
+function finalize_session_attendance(int $sessionId): array
+{
+    $pdo = db();
+    $ownsTransaction = !$pdo->inTransaction();
+    if ($ownsTransaction) {
+        $pdo->beginTransaction();
+    }
+
+    try {
+        $lock = $pdo->prepare(
+            'SELECT session_id, module_id, lecturer_id, batch_id, session_date,
+                    scheduled_start, scheduled_end, break_start, break_end,
+                    actual_start, actual_end, late_after_minutes, status
+             FROM lecture_sessions
+             WHERE session_id = :session_id
+             FOR UPDATE'
+        );
+        $lock->execute(['session_id' => $sessionId]);
+        $session = $lock->fetch();
+        $lock->closeCursor();
+        if ($session === false) {
+            throw new InvalidArgumentException('Lecture session not found.');
+        }
+        if ($session['status'] === 'CANCELLED') {
+            if ($ownsTransaction) {
+                $pdo->commit();
+            }
+
+            return ['finalized' => 0, 'skipped' => 1];
+        }
+        if ($session['status'] !== 'COMPLETED') {
+            throw new InvalidArgumentException('Attendance can only be finalized for a completed lecture.');
+        }
+
+        $clipEnd = session_effective_teaching_end($session);
+        if (!$clipEnd instanceof DateTimeImmutable) {
+            throw new InvalidArgumentException('Lecture session times are invalid.');
+        }
+
+        $eligible = list_eligible_students_for_session($sessionId, true);
+        $nowStamp = app_now_datetime();
+        $upsert = $pdo->prepare(
+            "INSERT INTO attendance_records
+                (student_id, session_id, first_entry, last_exit, total_present_minutes,
+                 teaching_minutes, attendance_percent, status, late_minutes, left_early, finalized_at)
+             VALUES
+                (:student_id, :session_id, :first_entry, :last_exit, :total_present_minutes,
+                 :teaching_minutes, :attendance_percent, :status, :late_minutes, :left_early, :finalized_at)
+             ON DUPLICATE KEY UPDATE
+                first_entry = VALUES(first_entry),
+                last_exit = VALUES(last_exit),
+                total_present_minutes = VALUES(total_present_minutes),
+                teaching_minutes = VALUES(teaching_minutes),
+                attendance_percent = VALUES(attendance_percent),
+                status = VALUES(status),
+                late_minutes = VALUES(late_minutes),
+                left_early = VALUES(left_early),
+                finalized_at = VALUES(finalized_at)"
+        );
+
+        $finalized = 0;
+        foreach ($eligible as $student) {
+            $studentId = (int) $student['student_id'];
+            $computed = compute_student_session_attendance($session, $studentId, null, $clipEnd);
+            $upsert->execute([
+                'student_id' => $studentId,
+                'session_id' => $sessionId,
+                'first_entry' => $computed['first_official_entry'],
+                'last_exit' => $computed['last_exit'],
+                'total_present_minutes' => $computed['attended_teaching_minutes'],
+                'teaching_minutes' => $computed['teaching_minutes'],
+                'attendance_percent' => number_format((float) $computed['attendance_percent'], 2, '.', ''),
+                'status' => $computed['status'],
+                'late_minutes' => $computed['late_minutes'],
+                'left_early' => $computed['left_early'] ? 1 : 0,
+                'finalized_at' => $nowStamp,
+            ]);
+            $finalized++;
+        }
+
+        if ($ownsTransaction) {
+            $pdo->commit();
+        }
+
+        return ['finalized' => $finalized, 'skipped' => 0];
+    } catch (Throwable $exception) {
+        if ($ownsTransaction && $pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        throw $exception;
+    }
+}
+
+function finalize_session_attendance_authorized(int $sessionId): array
+{
+    $session = get_lecture_session($sessionId);
+    if ($session === null) {
+        throw new InvalidArgumentException('Lecture session not found.');
+    }
+    if (!user_can_control_session($session)) {
+        throw new InvalidArgumentException('You do not have permission to finalize this session.');
+    }
+
+    return finalize_session_attendance($sessionId);
+}
+
+/**
+ * @return list<array<string, mixed>>
+ */
+function list_session_attendance_records(int $sessionId): array
+{
+    $statement = db()->prepare(
+        "SELECT r.attendance_id, r.student_id, r.session_id, r.first_entry, r.last_exit,
+                r.total_present_minutes, r.teaching_minutes, r.attendance_percent,
+                r.status, r.late_minutes, r.left_early, r.finalized_at,
+                s.registration_no, s.first_name, s.last_name
+         FROM attendance_records r
+         INNER JOIN students s ON s.student_id = r.student_id
+         WHERE r.session_id = :session_id
+         ORDER BY s.last_name, s.first_name, s.registration_no"
+    );
+    $statement->execute(['session_id' => $sessionId]);
+
+    return $statement->fetchAll();
+}
+
+/**
+ * @return list<array<string, mixed>>
+ */
+function list_student_attendance_records(int $studentId): array
+{
+    $statement = db()->prepare(
+        "SELECT r.attendance_id, r.student_id, r.session_id, r.first_entry, r.last_exit,
+                r.total_present_minutes, r.teaching_minutes, r.attendance_percent,
+                r.status, r.late_minutes, r.left_early, r.finalized_at,
+                ls.session_date, ls.scheduled_start, ls.scheduled_end, ls.status AS session_status,
+                m.module_code, m.module_name
+         FROM attendance_records r
+         INNER JOIN lecture_sessions ls ON ls.session_id = r.session_id
+         INNER JOIN modules m ON m.module_id = ls.module_id
+         WHERE r.student_id = :student_id
+           AND ls.status = 'COMPLETED'
+         ORDER BY ls.session_date DESC, ls.scheduled_start DESC, m.module_code"
+    );
+    $statement->execute(['student_id' => $studentId]);
+
+    return $statement->fetchAll();
 }
 
 function update_lecture_session_break(int $sessionId, ?string $breakStart, ?string $breakEnd): void
