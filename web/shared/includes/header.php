@@ -8,6 +8,11 @@ if (!defined('APP_STARTED')) {
 }
 
 $pageTitle = $pageTitle ?? APP_NAME;
+$user = current_user();
+$homeUrl = $user !== null
+    ? app_url(role_dashboard_path($user['role']))
+    : app_url('login.php');
+$flash = get_flash();
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -21,7 +26,28 @@ $pageTitle = $pageTitle ?? APP_NAME;
 <body class="bg-light d-flex flex-column min-vh-100">
 <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
     <div class="container">
-        <a class="navbar-brand" href="<?= e(public_base_url() ?: '/') ?>"><?= e(APP_NAME) ?></a>
+        <a class="navbar-brand" href="<?= e($homeUrl) ?>"><?= e(APP_NAME) ?></a>
+        <?php if ($user !== null): ?>
+            <div class="d-flex align-items-center gap-3">
+                <span class="text-white-50 small"><?= e($user['username']) ?></span>
+                <form method="post" action="<?= e(app_url('logout.php')) ?>" class="mb-0">
+                    <?= csrf_field() ?>
+                    <button type="submit" class="btn btn-outline-light btn-sm">Logout</button>
+                </form>
+            </div>
+        <?php endif; ?>
     </div>
 </nav>
 <main class="container py-4 flex-grow-1">
+<?php if ($flash !== null): ?>
+    <?php
+    $flashClass = match ($flash['type']) {
+        'success' => 'alert-success',
+        'error' => 'alert-danger',
+        default => 'alert-info',
+    };
+    ?>
+    <div class="alert <?= e($flashClass) ?>" role="alert">
+        <?= e($flash['message']) ?>
+    </div>
+<?php endif; ?>

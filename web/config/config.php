@@ -39,13 +39,25 @@ function public_base_url(): string
         return $base;
     }
 
-    $documentRoot = realpath($_SERVER['DOCUMENT_ROOT'] ?? '') ?: '';
     $publicPath = realpath(PUBLIC_PATH) ?: '';
+    $documentRoot = realpath($_SERVER['DOCUMENT_ROOT'] ?? '') ?: '';
+    $scriptFile = realpath($_SERVER['SCRIPT_FILENAME'] ?? '') ?: '';
 
     if ($documentRoot !== '' && $publicPath !== '' && str_starts_with($publicPath, $documentRoot)) {
         $relative = substr($publicPath, strlen($documentRoot));
         $base = rtrim(str_replace('\\', '/', $relative), '/');
         return $base;
+    }
+
+    if ($scriptFile !== '' && $publicPath !== '' && str_starts_with($scriptFile, $publicPath)) {
+        $scriptUrl = str_replace('\\', '/', (string) ($_SERVER['SCRIPT_NAME'] ?? ''));
+        $relativeFile = str_replace('\\', '/', substr($scriptFile, strlen($publicPath)));
+        $suffix = $relativeFile !== '' ? '/' . ltrim($relativeFile, '/') : '';
+
+        if ($suffix !== '' && str_ends_with($scriptUrl, $suffix)) {
+            $base = rtrim(substr($scriptUrl, 0, -strlen($suffix)), '/');
+            return $base;
+        }
     }
 
     $scriptDir = str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'] ?? '/index.php'));
@@ -57,4 +69,34 @@ function public_base_url(): string
 function asset_url(string $path): string
 {
     return public_base_url() . '/assets/' . ltrim($path, '/');
+}
+
+/**
+ * Application URL path. Browser-facing routes live under web/public.
+ */
+function app_base_url(): string
+{
+    return public_base_url();
+}
+
+function app_url(string $path = ''): string
+{
+    $base = public_base_url();
+    $path = ltrim($path, '/');
+
+    if ($path === '') {
+        return $base === '' ? '/' : $base . '/';
+    }
+
+    return ($base === '' ? '' : $base) . '/' . $path;
+}
+
+function redirect(string $path): never
+{
+    if (!str_starts_with($path, 'http://') && !str_starts_with($path, 'https://')) {
+        $path = app_url($path);
+    }
+
+    header('Location: ' . $path, true, 302);
+    exit;
 }
