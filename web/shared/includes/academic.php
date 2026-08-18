@@ -1502,3 +1502,267 @@ function list_visible_sessions_for_student(int $studentId, array $filters = []):
 
     return $visible;
 }
+
+/**
+ * Late threshold datetime for a lecture session.
+ * Not used to write LATE/ABSENT; reserved for the next attendance stage.
+ */
+function session_late_threshold_datetime(array $session): ?DateTimeImmutable
+{
+    $date = (string) ($session['session_date'] ?? '');
+    $start = normalize_time_hm((string) ($session['scheduled_start'] ?? ''));
+    $minutes = (int) ($session['late_after_minutes'] ?? 0);
+    if (!validate_date_ymd($date) || !validate_time_hm($start)) {
+        return null;
+    }
+
+    $threshold = DateTimeImmutable::createFromFormat(
+        'Y-m-d H:i',
+        $date . ' ' . $start,
+        new DateTimeZone(APP_TIMEZONE)
+    );
+    if ($threshold === false) {
+        return null;
+    }
+
+    return $threshold->modify('+' . max(0, $minutes) . ' minutes');
+}
+
+function normalize_camera_id(?string $cameraId): ?string
+{
+    $value = trim((string) $cameraId);
+    if ($value === '') {
+        return null;
+    }
+
+    $value = preg_replace('/[^A-Za-z0-9._-]/', '', $value) ?? '';
+    $value = substr($value, 0, 50);
+
+    return $value === '' ? null : $value;
+}
+
+function student_has_in_event(int $studentId, int $sessionId): bool
+{
+    $statement = db()->prepare(
+        "SELECT event_id FROM attendance_events
+         WHERE student_id = :student_id AND session_id = :session_id AND event_type = 'IN'
+         LIMIT 1"
+    );
+    $statement->execute([
+        'student_id' => $studentId,
+        'session_id' => $sessionId,
+    ]);
+
+    return $statement->fetch() !== false;
+}
+
+/**
+ * Resolve which IN_PROGRESS session a recognized student may check in to.
+ * Does not insert attendance. Reuses is_student_eligible_for_session().
+ *
+ * @return array{
+ *   result: string,
+ *   student?: array<string, mixed>,
+ *   session?: array<string, mixed>,
+ *   session_ids?: list<int>
+ * }
+ */
+function resolve_in_progress_session_for_student(int $studentId): array
+{
+    $student = get_student($studentId);
+    if ($student === null) {
+        return ['result' => 'INVALID_STUDENT'];
+    }
+
+    $inProgress = get_in_progress_sessions();
+    if ($inProgress === []) {
+        return [
+            'result' => 'NO_ACTIVE_SESSION',
+            'student' => $student,
+        ];
+    }
+
+    $eligible = [];
+    foreach ($inProgress as $session) {
+        if (is_student_eligible_for_session($studentId, (int) $session['session_id'])) {
+            $eligible[] = $session;
+        }
+    }
+
+    if ($eligible === []) {
+        return [
+            'result' => 'NOT_ELIGIBLE',
+            'student' => $student,
+        ];
+    }
+
+    if (count($eligible) > 1) {
+        $ids = array_map(static fn (array $session): int => (int) $session['session_id'], $eligible);
+        error_log(
+            'Ambiguous IN_PROGRESS sessions for student_id=' . $studentId
+            . ' session_ids=' . implode(',', $ids)
+        );
+
+        return [
+            'result' => 'AMBIGUOUS_ACTIVE_SESSIONS',
+            'student' => $student,
+            'session_ids' => $ids,
+        ];
+    }
+
+    return [
+        'result' => 'ELIGIBLE',
+        'student' => $student,
+        'session' => $eligible[0],
+    ];
+}
+
+/**
+ * Record a face-recognition IN event when exactly one eligible session is IN_PROGRESS.
+ * Does not write OUT events or attendance_records.
+ *
+ * @return array<string, mixed>
+ */
+function record_face_check_in(int $studentId, float $confidence, ?string $cameraId = null): array
+{
+    $resolution = resolve_in_progress_session_for_student($studentId);
+    if (($resolution['result'] ?? '') !== 'ELIGIBLE') {
+        return public_check_in_result($resolution);
+    }
+
+    /** @var array<string, mixed> $session */
+    $session = $resolution['session'];
+    $sessionId = (int) $session['session_id'];
+    $camera = normalize_camera_id($cameraId);
+    $confidence = max(0.0, min(100.0, round($confidence, 2)));
+    $lockName = sprintf('att_in_%d_%d', $studentId, $sessionId);
+
+    $pdo = db();
+    $lockAcquired = false;
+
+    try {
+        $lockStatement = $pdo->prepare('SELECT GET_LOCK(:lock_name, 5)');
+        $lockStatement->execute(['lock_name' => $lockName]);
+        $lockAcquired = (int) $lockStatement->fetchColumn() === 1;
+        if (!$lockAcquired) {
+            error_log('Could not acquire attendance IN lock for student_id=' . $studentId . ' session_id=' . $sessionId);
+            return [
+                'result' => 'ERROR',
+                'student_id' => $studentId,
+            ];
+        }
+
+        $pdo->beginTransaction();
+
+        $statusLock = $pdo->prepare(
+            "SELECT session_id, status FROM lecture_sessions WHERE session_id = :session_id FOR UPDATE"
+        );
+        $statusLock->execute(['session_id' => $sessionId]);
+        $lockedSession = $statusLock->fetch();
+        if ($lockedSession === false || $lockedSession['status'] !== 'IN_PROGRESS') {
+            $pdo->rollBack();
+            return [
+                'result' => 'NO_ACTIVE_SESSION',
+                'student_id' => $studentId,
+            ];
+        }
+
+        if (!is_student_eligible_for_session($studentId, $sessionId)) {
+            $pdo->rollBack();
+            return [
+                'result' => 'NOT_ELIGIBLE',
+                'student_id' => $studentId,
+                'session_id' => $sessionId,
+                'module_code' => $session['module_code'] ?? null,
+            ];
+        }
+
+        $existing = $pdo->prepare(
+            "SELECT event_id, recognized_at FROM attendance_events
+             WHERE student_id = :student_id AND session_id = :session_id AND event_type = 'IN'
+             ORDER BY recognized_at ASC, event_id ASC
+             LIMIT 1"
+        );
+        $existing->execute([
+            'student_id' => $studentId,
+            'session_id' => $sessionId,
+        ]);
+        $existingIn = $existing->fetch();
+        if ($existingIn !== false) {
+            $pdo->commit();
+            return [
+                'result' => 'ALREADY_CHECKED_IN',
+                'student_id' => $studentId,
+                'session_id' => $sessionId,
+                'module_code' => $session['module_code'] ?? null,
+                'event_id' => (int) $existingIn['event_id'],
+                'recognized_at' => (string) $existingIn['recognized_at'],
+            ];
+        }
+
+        $recognizedAt = app_now_datetime();
+        $insert = $pdo->prepare(
+            "INSERT INTO attendance_events
+                (student_id, session_id, event_type, recognized_at, confidence, camera_id)
+             VALUES
+                (:student_id, :session_id, 'IN', :recognized_at, :confidence, :camera_id)"
+        );
+        $insert->execute([
+            'student_id' => $studentId,
+            'session_id' => $sessionId,
+            'recognized_at' => $recognizedAt,
+            'confidence' => $confidence,
+            'camera_id' => $camera,
+        ]);
+        $eventId = (int) $pdo->lastInsertId();
+        $pdo->commit();
+
+        return [
+            'result' => 'CHECKED_IN',
+            'student_id' => $studentId,
+            'session_id' => $sessionId,
+            'module_code' => $session['module_code'] ?? null,
+            'event_id' => $eventId,
+            'recognized_at' => $recognizedAt,
+            'confidence' => $confidence,
+            'camera_id' => $camera,
+        ];
+    } catch (Throwable $exception) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        error_log('Face check-in failed for student_id=' . $studentId . ': ' . $exception->getMessage());
+        return [
+            'result' => 'ERROR',
+            'student_id' => $studentId,
+        ];
+    } finally {
+        if ($lockAcquired) {
+            $release = $pdo->prepare('SELECT RELEASE_LOCK(:lock_name)');
+            $release->execute(['lock_name' => $lockName]);
+        }
+    }
+}
+
+/**
+ * @param array<string, mixed> $resolution
+ * @return array<string, mixed>
+ */
+function public_check_in_result(array $resolution): array
+{
+    $result = (string) ($resolution['result'] ?? 'ERROR');
+    $payload = ['result' => $result];
+
+    if (isset($resolution['student']['student_id'])) {
+        $payload['student_id'] = (int) $resolution['student']['student_id'];
+    }
+    if (isset($resolution['session']['session_id'])) {
+        $payload['session_id'] = (int) $resolution['session']['session_id'];
+        $payload['module_code'] = $resolution['session']['module_code'] ?? null;
+    }
+    if (isset($resolution['session_ids'])) {
+        $payload['session_ids'] = $resolution['session_ids'];
+    }
+
+    return $payload;
+}

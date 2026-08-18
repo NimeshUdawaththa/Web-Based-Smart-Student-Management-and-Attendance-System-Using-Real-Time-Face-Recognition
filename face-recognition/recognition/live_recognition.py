@@ -5,7 +5,8 @@ Usage (from the face-recognition directory, venv active):
 
     python -m recognition.live_recognition
 
-Press Q to quit, R to reload enrolled profiles. No attendance is written.
+Press Q to quit, R to reload enrolled profiles.
+Eligible recognized students are checked in once per IN_PROGRESS session.
 """
 
 from __future__ import annotations
@@ -26,7 +27,7 @@ if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
 import config
-import db
+from recognition.attendance_client import AttendanceDecision, submit_recognized_check_in, unknown_decision
 from recognition.cooldown import RecognitionCooldown
 from recognition.matcher import MatchResult, match_encoding
 from recognition.metrics import RecognitionMetrics
@@ -36,8 +37,10 @@ logger = logging.getLogger(__name__)
 
 _BOX_KNOWN = (40, 180, 60)
 _BOX_UNKNOWN = (40, 40, 220)
+_BOX_WARN = (0, 140, 255)
 _TEXT_KNOWN = (240, 255, 240)
 _TEXT_UNKNOWN = (220, 220, 255)
+_TEXT_WARN = (220, 240, 255)
 
 
 def _scale_location(location: tuple[int, int, int, int], inv_scale: float) -> tuple[int, int, int, int]:
@@ -70,28 +73,87 @@ def recognize_faces_in_frame(bgr_frame: np.ndarray, gallery: FaceGallery) -> lis
     return results
 
 
-def _draw_match(frame: np.ndarray, location: tuple[int, int, int, int], match: MatchResult) -> None:
+def _draw_match(
+    frame: np.ndarray,
+    location: tuple[int, int, int, int],
+    match: MatchResult,
+    decision: AttendanceDecision,
+) -> None:
     top, right, bottom, left = location
-    color = _BOX_KNOWN if match.is_match else _BOX_UNKNOWN
-    text_color = _TEXT_KNOWN if match.is_match else _TEXT_UNKNOWN
+    if decision.code == 'UNKNOWN' or not match.is_match:
+        color, text_color = _BOX_UNKNOWN, _TEXT_UNKNOWN
+    elif decision.code in {'NOT_ELIGIBLE', 'NO_ACTIVE_SESSION', 'AMBIGUOUS_ACTIVE_SESSIONS', 'INVALID_STUDENT'}:
+        color, text_color = _BOX_WARN, _TEXT_WARN
+    else:
+        color, text_color = _BOX_KNOWN, _TEXT_KNOWN
+
     cv2.rectangle(frame, (left, top), (right, bottom), color, 2)
 
+    lines: list[str] = [decision.overlay_title]
     if match.is_match:
-        name_line = f'{match.full_name} | {match.registration_no}'
-        id_line = f'ID {match.student_id}'
-        dist_line = f'd={match.distance:.3f}  {match.confidence:.0f}%'
-    else:
-        name_line = config.UNKNOWN_LABEL
-        id_line = ''
-        dist_line = f'd={match.distance:.3f}' if match.distance is not None else 'no gallery'
+        lines.append(match.full_name or match.label)
+        if match.registration_no:
+            lines.append(str(match.registration_no))
+        if decision.code in {'CHECKED_IN', 'ALREADY_CHECKED_IN'} and decision.module_code:
+            lines.append(str(decision.module_code))
+        if decision.code == 'CHECKED_IN' and decision.recognized_at:
+            lines.append(str(decision.recognized_at))
+    elif match.distance is not None:
+        lines.append(f'd={match.distance:.3f}')
 
-    y = max(top - 8, 50)
-    cv2.putText(frame, name_line, (left, y - 22), cv2.FONT_HERSHEY_SIMPLEX, 0.55, text_color, 2)
-    if id_line:
-        cv2.putText(frame, id_line, (left, y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, text_color, 1)
-        cv2.putText(frame, dist_line, (left, bottom + 18), cv2.FONT_HERSHEY_SIMPLEX, 0.5, text_color, 1)
-    else:
-        cv2.putText(frame, dist_line, (left, bottom + 18), cv2.FONT_HERSHEY_SIMPLEX, 0.5, text_color, 1)
+    y = max(top - 10, 20 + 20 * len(lines))
+    for index, line in enumerate(reversed(lines)):
+        cv2.putText(
+            frame,
+            line,
+            (left, y - (index * 20)),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.52,
+            text_color,
+            2,
+        )
+
+
+def _attendance_for_match(
+    match: MatchResult,
+    cooldown: RecognitionCooldown,
+    cache: dict[int, AttendanceDecision],
+) -> AttendanceDecision:
+    if not match.is_match or match.student_id is None:
+        return unknown_decision()
+
+    student_id = match.student_id
+    if not cooldown.observe(student_id):
+        cached = cache.get(student_id)
+        if cached is None:
+            return AttendanceDecision(code='ERROR')
+        if cached.code == 'CHECKED_IN':
+            return AttendanceDecision(
+                code='ALREADY_CHECKED_IN',
+                module_code=cached.module_code,
+                recognized_at=cached.recognized_at,
+                session_id=cached.session_id,
+                event_id=cached.event_id,
+            )
+        return cached
+
+    decision = submit_recognized_check_in(student_id, match.confidence)
+    cache[student_id] = decision
+    if decision.code == 'CHECKED_IN':
+        logger.info(
+            'Checked in student_id=%s session_id=%s module=%s event_id=%s',
+            student_id,
+            decision.session_id,
+            decision.module_code,
+            decision.event_id,
+        )
+    elif decision.code == 'ALREADY_CHECKED_IN':
+        logger.info('Already checked in student_id=%s session_id=%s', student_id, decision.session_id)
+    elif decision.code in {'NOT_ELIGIBLE', 'NO_ACTIVE_SESSION', 'AMBIGUOUS_ACTIVE_SESSIONS'}:
+        logger.info('No attendance write for student_id=%s result=%s', student_id, decision.code)
+    elif decision.code == 'ERROR':
+        logger.warning('Attendance unavailable for student_id=%s', student_id)
+    return decision
 
 
 def _draw_hud(frame: np.ndarray, gallery: FaceGallery, fps: float, processing_ms: float | None) -> None:
@@ -112,9 +174,8 @@ def run_live_recognition(
     cooldown: RecognitionCooldown | None = None,
 ) -> dict:
     """
-    Open the webcam and identify enrolled students until Q or stop_event.
-
-    Always releases the camera. Does not write attendance events.
+    Open the webcam, identify enrolled students, and record IN attendance
+    through PHP when exactly one eligible lecture is IN_PROGRESS.
     """
     gallery = get_gallery()
     if metrics is None:
@@ -129,12 +190,13 @@ def run_live_recognition(
 
     window_title = 'SmartAMS – Live Recognition (Q quit, R reload)'
     frame_index = 0
-    last_results: list[tuple[tuple[int, int, int, int], MatchResult]] = []
+    last_results: list[tuple[tuple[int, int, int, int], MatchResult, AttendanceDecision]] = []
     last_process_ms: float | None = None
     fps = 0.0
     fps_counter = 0
     fps_t0 = time.perf_counter()
     cancelled = False
+    attendance_cache: dict[int, AttendanceDecision] = {}
 
     logger.info(
         'Live recognition started (threshold=%.3f, match_k=%s, scale=%.2f, skip=%s)',
@@ -169,33 +231,22 @@ def run_live_recognition(
 
             if should_process:
                 t0 = time.perf_counter()
-                last_results = recognize_faces_in_frame(frame, gallery)
+                recognized = recognize_faces_in_frame(frame, gallery)
                 last_process_ms = (time.perf_counter() - t0) * 1000.0
-                metrics.record_frame([match for _, match in last_results], last_process_ms)
+                metrics.record_frame([match for _, match in recognized], last_process_ms)
 
-                for _, match in last_results:
-                    if match.is_match and match.student_id is not None:
-                        eligible = cooldown.observe(match.student_id)
-                        if eligible:
-                            student = db.get_student_by_id(match.student_id)
-                            if student is None:
-                                logger.warning(
-                                    'Matched student_id=%s is not present in MySQL; treating display identity as stale',
-                                    match.student_id,
-                                )
-                            else:
-                                logger.info(
-                                    'Recognized student_id=%s registration_no=%s name=%s %s distance=%.4f (cooldown open; no attendance write)',
-                                    student['student_id'],
-                                    student['registration_no'],
-                                    student['first_name'],
-                                    student['last_name'],
-                                    match.distance if match.distance is not None else -1.0,
-                                )
+                last_results = []
+                for location, match in recognized:
+                    try:
+                        decision = _attendance_for_match(match, cooldown, attendance_cache)
+                    except Exception:
+                        logger.exception('Attendance handling failed for a face; continuing recognition')
+                        decision = AttendanceDecision(code='ERROR') if match.is_match else unknown_decision()
+                    last_results.append((location, match, decision))
 
             display = frame
-            for location, match in last_results:
-                _draw_match(display, location, match)
+            for location, match, decision in last_results:
+                _draw_match(display, location, match, decision)
             _draw_hud(display, gallery, fps, last_process_ms)
 
             cv2.imshow(window_title, display)

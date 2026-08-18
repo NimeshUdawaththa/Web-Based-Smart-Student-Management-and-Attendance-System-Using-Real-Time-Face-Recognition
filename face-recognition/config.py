@@ -46,3 +46,11 @@ PROCESS_EVERY_N_FRAMES = int(os.getenv('FACE_PROCESS_EVERY_N', '2'))
 RECOGNITION_COOLDOWN_SECONDS = float(os.getenv('FACE_RECOGNITION_COOLDOWN', '5.0'))
 FACE_DETECTION_MODEL = os.getenv('FACE_DETECTION_MODEL', 'hog')  # CPU only
 UNKNOWN_LABEL = 'UNKNOWN'
+
+# --- Attendance Part 1 (IN events via PHP academic layer) ---
+PHP_INTERNAL_URL = (os.getenv('PHP_INTERNAL_URL') or os.getenv('APP_URL') or 'http://127.0.0.1').rstrip('/')
+INTERNAL_API_TOKEN = os.getenv('INTERNAL_API_TOKEN', '')
+PHP_CLI_PATH = os.getenv('PHP_CLI_PATH', r'C:\xampp\php\php.exe')
+ATTENDANCE_BRIDGE = os.getenv('ATTENDANCE_BRIDGE', 'cli').strip().lower()
+ATTENDANCE_CAMERA_ID = os.getenv('ATTENDANCE_CAMERA_ID', f'webcam-{CAMERA_INDEX}')
+ATTENDANCE_TIMEOUT_SECONDS = float(os.getenv('ATTENDANCE_TIMEOUT_SECONDS', '4'))
