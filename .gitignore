@@ -1,0 +1,47 @@
+# Environment / Secrets
+.env
+.env.*
+!.env.example
+
+# PHP dependencies
+vendor/
+
+# Python virtual environments
+venv/
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+
+# Python environment / cache
+.pytest_cache/
+.mypy_cache/
+
+# Face Recognition Private Data
+face-recognition/dataset/*
+!face-recognition/dataset/.gitkeep
+face-recognition/encodings/*
+!face-recognition/encodings/.gitkeep
+face-recognition/captured_faces/*
+!face-recognition/captured_faces/.gitkeep
+*.pkl
+
+# Student Uploaded Files / Runtime Files
+web/uploads/*
+!web/uploads/.gitkeep
+logs/
+*.log
+
+# Database local/config files
+*.sqlite
+*.db
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
