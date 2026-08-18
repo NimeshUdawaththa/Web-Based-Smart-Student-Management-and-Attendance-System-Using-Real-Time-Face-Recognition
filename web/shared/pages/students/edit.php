@@ -236,6 +236,7 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
 
         <div class="mt-4 d-flex gap-2">
             <button type="submit" class="btn btn-primary">Save Changes</button>
+            <a href="<?= e(app_url(str_replace('/students', '/enrollments', $studentRoutePrefix) . '/student.php?id=' . $studentId)) ?>" class="btn btn-outline-secondary">Module Enrollment</a>
             <a href="<?= e(app_url($studentRoutePrefix . '/face-enroll.php?id=' . $studentId)) ?>" class="btn btn-outline-secondary">Enroll Face</a>
         </div>
     </div>

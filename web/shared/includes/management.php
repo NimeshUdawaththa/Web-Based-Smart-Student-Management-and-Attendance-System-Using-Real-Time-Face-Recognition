@@ -955,15 +955,31 @@ function management_nav_items(string $role): array
             ['label' => 'Student Management', 'href' => app_url('admin/students/index.php')],
             ['label' => 'Lecturer Management', 'href' => app_url('admin/lecturers/index.php')],
             ['label' => 'Academic Staff', 'href' => app_url('admin/academic-staff/index.php')],
+            ['label' => 'Modules', 'href' => app_url('admin/modules/index.php')],
+            ['label' => 'Lecturer Assignments', 'href' => app_url('admin/module-assignments/index.php')],
+            ['label' => 'Module Enrollment', 'href' => app_url('admin/enrollments/index.php')],
+            ['label' => 'Timetable', 'href' => app_url('admin/schedules/index.php')],
+            ['label' => 'Lecture Sessions', 'href' => app_url('admin/sessions/index.php')],
         ],
         'ACADEMIC_STAFF' => [
             ['label' => 'Dashboard', 'href' => app_url('academic-staff/dashboard.php')],
             ['label' => 'Student Management', 'href' => app_url('academic-staff/students/index.php')],
             ['label' => 'Lecturers', 'href' => app_url('academic-staff/lecturers/index.php')],
+            ['label' => 'Modules', 'href' => app_url('academic-staff/modules/index.php')],
+            ['label' => 'Lecturer Assignments', 'href' => app_url('academic-staff/module-assignments/index.php')],
+            ['label' => 'Module Enrollment', 'href' => app_url('academic-staff/enrollments/index.php')],
+            ['label' => 'Timetable', 'href' => app_url('academic-staff/schedules/index.php')],
+            ['label' => 'Lecture Sessions', 'href' => app_url('academic-staff/sessions/index.php')],
         ],
         'LECTURER' => [
             ['label' => 'Dashboard', 'href' => app_url('lecturer/dashboard.php')],
             ['label' => 'Students', 'href' => app_url('lecturer/students/index.php')],
+            ['label' => 'My Timetable', 'href' => app_url('lecturer/schedules/index.php')],
+            ['label' => 'Lecture Sessions', 'href' => app_url('lecturer/sessions/index.php')],
+        ],
+        'STUDENT' => [
+            ['label' => 'Dashboard', 'href' => app_url('student/dashboard.php')],
+            ['label' => 'My Timetable', 'href' => app_url('student/timetable.php')],
         ],
         default => [
             ['label' => 'Dashboard', 'href' => app_url(role_dashboard_path($role))],
@@ -974,9 +990,11 @@ function management_nav_items(string $role): array
 function status_badge_class(string $status): string
 {
     return match ($status) {
-        'ACTIVE', 'ENROLLED' => 'text-bg-success',
-        'INACTIVE', 'NOT ENROLLED' => 'text-bg-secondary',
-        'SUSPENDED' => 'text-bg-warning',
+        'ACTIVE', 'ENROLLED', 'IN_PROGRESS' => 'text-bg-success',
+        'INACTIVE', 'NOT ENROLLED', 'COMPLETED' => 'text-bg-secondary',
+        'SCHEDULED' => 'text-bg-primary',
+        'SUSPENDED', 'DROPPED' => 'text-bg-warning',
+        'CANCELLED' => 'text-bg-danger',
         'GRADUATED' => 'text-bg-info',
         default => 'text-bg-light',
     };

@@ -107,6 +107,7 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
                             <?php if (!$readOnly): ?>
                                 <td class="text-end">
                                     <a href="<?= e(app_url($studentRoutePrefix . '/edit.php?id=' . $student['student_id'])) ?>" class="btn btn-sm btn-outline-primary">Edit</a>
+                                    <a href="<?= e(app_url(str_replace('/students', '/enrollments', $studentRoutePrefix) . '/student.php?id=' . $student['student_id'])) ?>" class="btn btn-sm btn-outline-secondary">Modules</a>
                                     <a href="<?= e(app_url($studentRoutePrefix . '/face-enroll.php?id=' . $student['student_id'])) ?>" class="btn btn-sm btn-outline-secondary">Enroll Face</a>
                                 </td>
                             <?php endif; ?>
