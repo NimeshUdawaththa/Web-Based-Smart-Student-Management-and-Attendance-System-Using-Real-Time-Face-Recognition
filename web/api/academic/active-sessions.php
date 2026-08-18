@@ -2,9 +2,10 @@
 
 declare(strict_types=1);
 
-require_once dirname(__DIR__, 2) . '/web/shared/includes/init.php';
+require_once dirname(__DIR__, 2) . '/shared/includes/init.php';
 
 require_login();
+sync_scheduled_session_states();
 
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');

@@ -47,7 +47,7 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
 ?>
 
 <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
-    <p class="text-muted mb-0">A lecture session is one dated occurrence. Attendance will attach to these sessions later.</p>
+    <p class="text-muted mb-0">Statuses update from the timetable when this page is opened. Start, Stop, and Cancel remain available as manual overrides.</p>
     <?php if ($canManage): ?>
         <div class="d-flex gap-2">
             <a href="<?= e(app_url($academicRoutePrefix . '/sessions/generate.php')) ?>" class="btn btn-outline-primary">Generate This Week</a>
@@ -128,7 +128,13 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
                             <td><?= e($session['lecturer_first_name'] . ' ' . $session['lecturer_last_name']) ?></td>
                             <td><?= e($session['room'] ?: '-') ?></td>
                             <td><?= e((string) $session['late_after_minutes']) ?> min</td>
-                            <td><span class="badge <?= e(status_badge_class($session['status'])) ?>"><?= e($session['status']) ?></span></td>
+                            <td>
+                                <span class="badge <?= e(status_badge_class($session['status'])) ?>"><?= e($session['status']) ?></span>
+                                <?php $hint = session_lifecycle_hint($session); ?>
+                                <?php if ($hint !== ''): ?>
+                                    <div class="small text-muted"><?= e($hint) ?></div>
+                                <?php endif; ?>
+                            </td>
                             <td class="text-end">
                                 <a href="<?= e(app_url($academicRoutePrefix . '/sessions/view.php?id=' . $session['session_id'])) ?>" class="btn btn-sm btn-outline-primary">Open</a>
                             </td>

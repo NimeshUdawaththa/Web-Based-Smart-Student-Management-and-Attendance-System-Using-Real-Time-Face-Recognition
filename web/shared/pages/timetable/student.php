@@ -58,7 +58,13 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
                             <td><?= e($session['module_code'] . ' – ' . $session['module_name']) ?></td>
                             <td><?= e($session['lecturer_first_name'] . ' ' . $session['lecturer_last_name']) ?></td>
                             <td><?= e($session['room'] ?: '-') ?></td>
-                            <td><span class="badge <?= e(status_badge_class($session['status'])) ?>"><?= e($session['status']) ?></span></td>
+                            <td>
+                                <span class="badge <?= e(status_badge_class($session['status'])) ?>"><?= e($session['status']) ?></span>
+                                <?php $hint = session_lifecycle_hint($session); ?>
+                                <?php if ($hint !== ''): ?>
+                                    <div class="small text-muted"><?= e($hint) ?></div>
+                                <?php endif; ?>
+                            </td>
                         </tr>
                     <?php endforeach; ?>
                 <?php endif; ?>
@@ -92,7 +98,13 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
                             <td><?= e($session['module_code']) ?></td>
                             <td><?= e($session['lecturer_first_name'] . ' ' . $session['lecturer_last_name']) ?></td>
                             <td><?= e($session['room'] ?: '-') ?></td>
-                            <td><span class="badge <?= e(status_badge_class($session['status'])) ?>"><?= e($session['status']) ?></span></td>
+                            <td>
+                                <span class="badge <?= e(status_badge_class($session['status'])) ?>"><?= e($session['status']) ?></span>
+                                <?php $hint = session_lifecycle_hint($session); ?>
+                                <?php if ($hint !== ''): ?>
+                                    <div class="small text-muted"><?= e($hint) ?></div>
+                                <?php endif; ?>
+                            </td>
                         </tr>
                     <?php endforeach; ?>
                 <?php endif; ?>

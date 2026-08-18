@@ -54,12 +54,269 @@ function weekdays(): array
 
 function app_today(): string
 {
-    return (new DateTimeImmutable('now', new DateTimeZone(APP_TIMEZONE)))->format('Y-m-d');
+    return app_now()->format('Y-m-d');
 }
 
 function app_now_datetime(): string
 {
-    return (new DateTimeImmutable('now', new DateTimeZone(APP_TIMEZONE)))->format('Y-m-d H:i:s');
+    return app_now()->format('Y-m-d H:i:s');
+}
+
+function app_now(): DateTimeImmutable
+{
+    return new DateTimeImmutable('now', new DateTimeZone(APP_TIMEZONE));
+}
+
+function parse_app_datetime(?string $value): ?DateTimeImmutable
+{
+    if ($value === null) {
+        return null;
+    }
+
+    $value = trim($value);
+    if ($value === '') {
+        return null;
+    }
+
+    foreach (['Y-m-d H:i:s', 'Y-m-d H:i'] as $format) {
+        $parsed = DateTimeImmutable::createFromFormat($format, $value, new DateTimeZone(APP_TIMEZONE));
+        if ($parsed instanceof DateTimeImmutable) {
+            return $parsed;
+        }
+    }
+
+    try {
+        return new DateTimeImmutable($value, new DateTimeZone(APP_TIMEZONE));
+    } catch (Exception) {
+        return null;
+    }
+}
+
+function session_scheduled_datetime(array $session, string $bound): ?DateTimeImmutable
+{
+    $time = $bound === 'end'
+        ? (string) ($session['scheduled_end'] ?? '')
+        : (string) ($session['scheduled_start'] ?? '');
+    $date = (string) ($session['session_date'] ?? '');
+    $hm = normalize_time_hm($time);
+    if (!validate_date_ymd($date) || !validate_time_hm($hm)) {
+        return null;
+    }
+
+    $parsed = DateTimeImmutable::createFromFormat(
+        'Y-m-d H:i',
+        $date . ' ' . $hm,
+        new DateTimeZone(APP_TIMEZONE)
+    );
+
+    return $parsed === false ? null : $parsed;
+}
+
+/**
+ * Hybrid timetable sync. No background daemon.
+ *
+ * Runs at most once per PHP request unless $force is true.
+ *
+ * Rules (APP_TIMEZONE, e.g. Asia/Colombo):
+ * - SCHEDULED and start <= now < end → IN_PROGRESS.
+ *   actual_start = scheduled start datetime (timetable open, not "when a page loaded").
+ * - SCHEDULED and now >= end → COMPLETED without opening.
+ *   actual_start stays NULL; actual_end = scheduled end.
+ * - IN_PROGRESS and now >= end → COMPLETED.
+ *   actual_end = scheduled end; existing actual_start is kept.
+ * - CANCELLED and COMPLETED are never changed.
+ *
+ * Auto-start still respects one IN_PROGRESS session per lecturer and per batch.
+ *
+ * @return array{skipped?: bool, opened: int, closed: int, expired: int}
+ */
+function sync_scheduled_session_states(bool $force = false): array
+{
+    static $alreadyRan = false;
+    if ($alreadyRan && !$force) {
+        return ['skipped' => true, 'opened' => 0, 'closed' => 0, 'expired' => 0];
+    }
+    $alreadyRan = true;
+
+    $opened = 0;
+    $closed = 0;
+    $expired = 0;
+
+    try {
+        $now = app_now();
+        $pdo = db();
+        $pdo->beginTransaction();
+        $statement = $pdo->query(
+            "SELECT session_id, lecturer_id, batch_id, status, session_date,
+                    scheduled_start, scheduled_end, actual_start, actual_end
+             FROM lecture_sessions
+             WHERE status IN ('SCHEDULED', 'IN_PROGRESS')
+             FOR UPDATE"
+        );
+        $rows = $statement === false ? [] : $statement->fetchAll();
+
+        $busyLecturers = [];
+        $busyBatches = [];
+        foreach ($rows as $row) {
+            if ($row['status'] !== 'IN_PROGRESS') {
+                continue;
+            }
+            $end = session_scheduled_datetime($row, 'end');
+            if ($end instanceof DateTimeImmutable && $now >= $end) {
+                continue;
+            }
+            $busyLecturers[(int) $row['lecturer_id']] = true;
+            $busyBatches[(int) $row['batch_id']] = true;
+        }
+
+        foreach ($rows as $row) {
+            if ($row['status'] !== 'IN_PROGRESS') {
+                continue;
+            }
+            $end = session_scheduled_datetime($row, 'end');
+            if (!$end instanceof DateTimeImmutable || $now < $end) {
+                continue;
+            }
+            $complete = $pdo->prepare(
+                "UPDATE lecture_sessions
+                 SET status = 'COMPLETED', actual_end = :actual_end
+                 WHERE session_id = :session_id AND status = 'IN_PROGRESS'"
+            );
+            $complete->execute([
+                'actual_end' => $end->format('Y-m-d H:i:s'),
+                'session_id' => $row['session_id'],
+            ]);
+            $closed += $complete->rowCount();
+        }
+
+        foreach ($rows as $row) {
+            if ($row['status'] !== 'SCHEDULED') {
+                continue;
+            }
+            $end = session_scheduled_datetime($row, 'end');
+            if (!$end instanceof DateTimeImmutable || $now < $end) {
+                continue;
+            }
+            $expire = $pdo->prepare(
+                "UPDATE lecture_sessions
+                 SET status = 'COMPLETED', actual_end = :actual_end
+                 WHERE session_id = :session_id AND status = 'SCHEDULED'"
+            );
+            $expire->execute([
+                'actual_end' => $end->format('Y-m-d H:i:s'),
+                'session_id' => $row['session_id'],
+            ]);
+            $expired += $expire->rowCount();
+        }
+
+        foreach ($rows as $row) {
+            if ($row['status'] !== 'SCHEDULED') {
+                continue;
+            }
+            $start = session_scheduled_datetime($row, 'start');
+            $end = session_scheduled_datetime($row, 'end');
+            if (!$start instanceof DateTimeImmutable || !$end instanceof DateTimeImmutable) {
+                continue;
+            }
+            if ($now < $start || $now >= $end) {
+                continue;
+            }
+
+            $lecturerId = (int) $row['lecturer_id'];
+            $batchId = (int) $row['batch_id'];
+            if (isset($busyLecturers[$lecturerId]) || isset($busyBatches[$batchId])) {
+                continue;
+            }
+
+            $open = $pdo->prepare(
+                "UPDATE lecture_sessions
+                 SET status = 'IN_PROGRESS', actual_start = :actual_start
+                 WHERE session_id = :session_id AND status = 'SCHEDULED'"
+            );
+            $open->execute([
+                'actual_start' => $start->format('Y-m-d H:i:s'),
+                'session_id' => $row['session_id'],
+            ]);
+            if ($open->rowCount() > 0) {
+                $opened++;
+                $busyLecturers[$lecturerId] = true;
+                $busyBatches[$batchId] = true;
+            }
+        }
+
+        $pdo->commit();
+    } catch (Throwable $exception) {
+        if (isset($pdo) && $pdo instanceof PDO && $pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        error_log('Lecture session timetable sync failed: ' . $exception->getMessage());
+    }
+
+    return [
+        'opened' => $opened,
+        'closed' => $closed,
+        'expired' => $expired,
+    ];
+}
+
+function session_lifecycle_note(array $session): string
+{
+    $status = (string) ($session['status'] ?? '');
+    $scheduledStart = session_scheduled_datetime($session, 'start');
+    $actualStart = parse_app_datetime(isset($session['actual_start']) ? (string) $session['actual_start'] : null);
+
+    return match ($status) {
+        'SCHEDULED' => 'Waiting for the scheduled start. Opening a session page, dashboard, or attendance check will start it automatically when that time is reached.',
+        'IN_PROGRESS' => (
+            $actualStart instanceof DateTimeImmutable
+            && $scheduledStart instanceof DateTimeImmutable
+            && $actualStart->format('Y-m-d H:i') === $scheduledStart->format('Y-m-d H:i')
+                ? 'Opened automatically from the timetable at the scheduled start. Manual Stop remains available.'
+                : (
+                    $actualStart instanceof DateTimeImmutable
+                    && $scheduledStart instanceof DateTimeImmutable
+                    && $actualStart < $scheduledStart
+                        ? 'Started manually before the scheduled start.'
+                        : 'In progress. Manual Stop remains available. It will complete automatically at the scheduled end.'
+                )
+        ),
+        'COMPLETED' => empty($session['actual_start'])
+            ? 'Closed automatically after the scheduled end without ever opening. It will not reopen.'
+            : 'Completed. It will not reopen automatically.',
+        'CANCELLED' => 'Cancelled. Timetable sync will not start or complete this session.',
+        default => '',
+    };
+}
+
+function session_lifecycle_hint(array $session): string
+{
+    $status = (string) ($session['status'] ?? '');
+    $scheduledStart = session_scheduled_datetime($session, 'start');
+    $actualStart = parse_app_datetime(isset($session['actual_start']) ? (string) $session['actual_start'] : null);
+
+    if (
+        $status === 'IN_PROGRESS'
+        && $actualStart instanceof DateTimeImmutable
+        && $scheduledStart instanceof DateTimeImmutable
+        && $actualStart->format('Y-m-d H:i') === $scheduledStart->format('Y-m-d H:i')
+    ) {
+        return 'Opened from timetable';
+    }
+
+    if (
+        $status === 'IN_PROGRESS'
+        && $actualStart instanceof DateTimeImmutable
+        && $scheduledStart instanceof DateTimeImmutable
+        && $actualStart < $scheduledStart
+    ) {
+        return 'Started early (manual)';
+    }
+
+    if ($status === 'COMPLETED' && empty($session['actual_start'])) {
+        return 'Ended without opening';
+    }
+
+    return '';
 }
 
 function weekday_from_date(string $date): ?string
@@ -935,6 +1192,8 @@ function set_schedule_status(int $scheduleId, string $status): void
  */
 function list_lecture_sessions(array $filters = []): array
 {
+    sync_scheduled_session_states();
+
     $sql = "SELECT ls.session_id, ls.module_id, ls.lecturer_id, ls.batch_id, ls.schedule_id,
                    ls.session_date, ls.scheduled_start, ls.scheduled_end, ls.actual_start, ls.actual_end,
                    ls.room, ls.late_after_minutes, ls.status,
@@ -996,6 +1255,8 @@ function list_lecture_sessions(array $filters = []): array
  */
 function get_lecture_session(int $sessionId): ?array
 {
+    sync_scheduled_session_states();
+
     $statement = db()->prepare(
         "SELECT ls.session_id, ls.module_id, ls.lecturer_id, ls.batch_id, ls.schedule_id,
                 ls.session_date, ls.scheduled_start, ls.scheduled_end, ls.actual_start, ls.actual_end,
@@ -1228,6 +1489,8 @@ function user_can_control_session(array $session): bool
 
 function start_lecture_session(int $sessionId): void
 {
+    sync_scheduled_session_states();
+
     $pdo = db();
     $pdo->beginTransaction();
     try {
@@ -1243,12 +1506,17 @@ function start_lecture_session(int $sessionId): void
             throw new InvalidArgumentException('Lecture session not found.');
         }
 
-        if ($session['status'] !== 'SCHEDULED') {
-            throw new InvalidArgumentException('Only scheduled sessions can be started.');
-        }
-
         if (!user_can_control_session($session)) {
             throw new InvalidArgumentException('You do not have permission to start this session.');
+        }
+
+        if ($session['status'] === 'IN_PROGRESS') {
+            $pdo->commit();
+            return;
+        }
+
+        if ($session['status'] !== 'SCHEDULED') {
+            throw new InvalidArgumentException('Only scheduled sessions can be started.');
         }
 
         $lecturerBusy = lecturer_in_progress_session_id((int) $session['lecturer_id'], $sessionId);
@@ -1284,12 +1552,16 @@ function complete_lecture_session(int $sessionId): void
         throw new InvalidArgumentException('Lecture session not found.');
     }
 
-    if ($session['status'] !== 'IN_PROGRESS') {
-        throw new InvalidArgumentException('Only an in-progress session can be completed.');
-    }
-
     if (!user_can_control_session($session)) {
         throw new InvalidArgumentException('You do not have permission to stop this session.');
+    }
+
+    if ($session['status'] === 'COMPLETED') {
+        return;
+    }
+
+    if ($session['status'] !== 'IN_PROGRESS') {
+        throw new InvalidArgumentException('Only an in-progress session can be completed.');
     }
 
     $statement = db()->prepare(
@@ -1569,6 +1841,8 @@ function student_has_in_event(int $studentId, int $sessionId): bool
  */
 function resolve_in_progress_session_for_student(int $studentId): array
 {
+    sync_scheduled_session_states();
+
     $student = get_student($studentId);
     if ($student === null) {
         return ['result' => 'INVALID_STUDENT'];

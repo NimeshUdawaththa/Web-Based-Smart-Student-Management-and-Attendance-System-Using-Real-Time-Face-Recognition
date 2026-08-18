@@ -20,20 +20,6 @@ if ($sessionId === null) {
     redirect($academicRoutePrefix . '/sessions/index.php');
 }
 
-$session = get_lecture_session($sessionId);
-if ($session === null) {
-    set_flash('error', 'Lecture session not found.');
-    redirect($academicRoutePrefix . '/sessions/index.php');
-}
-
-if ($restrictLecturerId !== null && (int) $session['lecturer_id'] !== $restrictLecturerId) {
-    set_flash('error', 'You can only view your own lecture sessions.');
-    redirect($academicRoutePrefix . '/sessions/index.php');
-}
-
-$pageTitle = $session['module_code'] . ' – ' . $session['session_date'];
-$canControl = user_can_control_session($session);
-
 if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
     if (!verify_csrf()) {
         set_flash('error', 'Unable to submit the form. Please try again.');
@@ -61,6 +47,21 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
     }
 }
 
+$session = get_lecture_session($sessionId);
+if ($session === null) {
+    set_flash('error', 'Lecture session not found.');
+    redirect($academicRoutePrefix . '/sessions/index.php');
+}
+
+if ($restrictLecturerId !== null && (int) $session['lecturer_id'] !== $restrictLecturerId) {
+    set_flash('error', 'You can only view your own lecture sessions.');
+    redirect($academicRoutePrefix . '/sessions/index.php');
+}
+
+$pageTitle = $session['module_code'] . ' – ' . $session['session_date'];
+$canControl = user_can_control_session($session);
+$lifecycleNote = session_lifecycle_note($session);
+
 $eligibleStudents = list_eligible_students_for_session($sessionId);
 $lateThreshold = late_threshold_time((string) $session['scheduled_start'], (int) $session['late_after_minutes']);
 
@@ -84,6 +85,9 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
                     Lecturer: <?= e($session['lecturer_first_name'] . ' ' . $session['lecturer_last_name']) ?>
                 </p>
                 <span class="badge <?= e(status_badge_class($session['status'])) ?>"><?= e($session['status']) ?></span>
+                <?php if ($lifecycleNote !== ''): ?>
+                    <p class="small text-muted mb-0 mt-2"><?= e($lifecycleNote) ?></p>
+                <?php endif; ?>
             </div>
             <div class="d-flex gap-2 flex-wrap">
                 <?php if ($canControl && $session['status'] === 'SCHEDULED'): ?>

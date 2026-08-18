@@ -67,7 +67,7 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
             <div class="card shadow-sm h-100">
                 <div class="card-body">
                     <h2 class="h5">Start Session</h2>
-                    <p class="text-muted">Open a scheduled lecture and start it when class begins.</p>
+                    <p class="text-muted">Sessions open automatically at the scheduled start. You can still start early or stop early.</p>
                     <a href="<?= e(app_url('lecturer/sessions/index.php?view=today')) ?>" class="btn btn-success btn-sm">Open sessions</a>
                 </div>
             </div>

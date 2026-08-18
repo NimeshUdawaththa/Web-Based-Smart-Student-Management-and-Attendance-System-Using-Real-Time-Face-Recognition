@@ -30,7 +30,7 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
         <div class="card shadow-sm h-100">
             <div class="card-body">
                 <h2 class="h5">Lecture Sessions</h2>
-                <p class="text-muted">Generate, start, stop, or cancel dated lectures.</p>
+                <p class="text-muted">Sessions follow the timetable automatically. Start, stop, or cancel remain available as overrides.</p>
                 <a href="<?= e(app_url('academic-staff/sessions/index.php')) ?>" class="btn btn-primary btn-sm">Open</a>
             </div>
         </div>
