@@ -43,6 +43,10 @@ function public_base_url(): string
     $documentRoot = realpath($_SERVER['DOCUMENT_ROOT'] ?? '') ?: '';
     $scriptFile = realpath($_SERVER['SCRIPT_FILENAME'] ?? '') ?: '';
 
+    if ($documentRoot !== '' && $publicPath !== '' && $documentRoot === $publicPath) {
+        return '';
+    }
+
     if ($documentRoot !== '' && $publicPath !== '' && str_starts_with($publicPath, $documentRoot)) {
         $relative = substr($publicPath, strlen($documentRoot));
         $base = rtrim(str_replace('\\', '/', $relative), '/');

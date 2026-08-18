@@ -248,6 +248,14 @@ function require_login(): void
 
 function require_role(string $role): void
 {
+    require_any_role([$role]);
+}
+
+/**
+ * @param list<string> $roles
+ */
+function require_any_role(array $roles): void
+{
     require_login();
 
     $user = current_user();
@@ -255,8 +263,25 @@ function require_role(string $role): void
         redirect('login.php');
     }
 
-    if ($user['role'] !== $role) {
+    if (!in_array($user['role'], $roles, true)) {
         set_flash('error', 'You do not have permission to access that page.');
         redirect(role_dashboard_path($user['role']));
     }
+}
+
+function require_admin(): void
+{
+    require_any_role(['ADMIN']);
+}
+
+function require_student_manager(): void
+{
+    require_any_role(['ADMIN', 'ACADEMIC_STAFF']);
+}
+
+function deny_access(): never
+{
+    $user = current_user();
+    set_flash('error', 'You do not have permission to access that page.');
+    redirect(role_dashboard_path($user['role'] ?? 'STUDENT'));
 }

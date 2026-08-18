@@ -5,3 +5,39 @@ body {
 .card {
     border: 0;
 }
+
+.dashboard-body {
+    background-color: #f8f9fa;
+}
+
+.dashboard-sidebar {
+    width: 260px;
+    min-height: 100vh;
+}
+
+.dashboard-content {
+    min-width: 0;
+}
+
+.dashboard-topbar {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.active-sidebar-link {
+    background-color: rgba(255, 255, 255, 0.15);
+    border-radius: 0.375rem;
+    font-weight: 600;
+}
+
+@media (max-width: 991.98px) {
+    .dashboard-shell {
+        flex-direction: column;
+    }
+
+    .dashboard-sidebar {
+        width: 100%;
+        min-height: auto;
+    }
+}
