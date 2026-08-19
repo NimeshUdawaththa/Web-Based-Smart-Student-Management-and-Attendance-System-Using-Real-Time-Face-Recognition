@@ -43,6 +43,10 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
 $submission = get_assignment_submission_for_student($assignmentId, $studentId);
 $displayStatus = student_coursework_display_status($assignment, $submission);
 $canSubmit = student_can_submit_coursework_assignment($studentId, $assignment);
+$isGraded = assignment_submission_is_graded($submission);
+$timing = $submission !== null
+    ? (assignment_submission_is_late($assignment, $submission) ? 'Late' : 'On Time')
+    : null;
 $pageTitle = (string) $assignment['title'];
 
 require INCLUDES_PATH . '/dashboard-layout-start.php';
@@ -86,16 +90,34 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
         <h2 class="h5">Your submission</h2>
         <?php if ($submission !== null): ?>
             <p class="mb-2"><strong>Submitted at:</strong> <?= e(format_assignment_datetime((string) $submission['submitted_at'])) ?></p>
-            <p class="mb-3">
+            <p class="mb-2"><strong>On time / Late:</strong> <?= e((string) $timing) ?></p>
+            <p class="mb-2">
                 <strong>Submission status:</strong>
-                <span class="badge <?= e(status_badge_class($displayStatus === 'LATE' ? 'LATE' : 'SUBMITTED')) ?>"><?= e($displayStatus === 'LATE' ? 'LATE' : 'SUBMITTED') ?></span>
+                <span class="badge <?= e(status_badge_class($displayStatus)) ?>"><?= e($displayStatus) ?></span>
             </p>
+            <p class="mb-2">
+                <strong>Grade:</strong>
+                <?= $isGraded
+                    ? e(format_assignment_grade_display($submission['grade'], $assignment['max_marks']))
+                    : 'Not graded yet' ?>
+            </p>
+            <?php if ($isGraded): ?>
+                <p class="mb-1"><strong>Feedback</strong></p>
+                <div class="border rounded p-3 bg-light mb-3">
+                    <?= !empty($submission['feedback'])
+                        ? nl2br(e((string) $submission['feedback']))
+                        : '<span class="text-muted">No feedback.</span>' ?>
+                </div>
+            <?php endif; ?>
             <a class="btn btn-outline-primary btn-sm mb-3" href="<?= e(assignment_download_url('student', 'submission', (int) $submission['submission_id'])) ?>">Download my file</a>
         <?php else: ?>
             <p class="text-muted">You have not submitted a file yet.</p>
+            <p class="mb-0"><strong>Grade:</strong> Not graded yet</p>
         <?php endif; ?>
 
-        <?php if ($canSubmit): ?>
+        <?php if ($isGraded): ?>
+            <p class="alert alert-info mb-0">Graded submissions cannot be replaced.</p>
+        <?php elseif ($canSubmit): ?>
             <form method="post" enctype="multipart/form-data">
                 <?= csrf_field() ?>
                 <input type="hidden" name="assignment_id" value="<?= e((string) $assignmentId) ?>">

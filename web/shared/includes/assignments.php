@@ -121,6 +121,10 @@ function assignment_submission_is_late(array $assignment, array $submission): bo
 
 function student_coursework_display_status(array $assignment, ?array $submission): string
 {
+    if ($submission !== null && ($submission['status'] ?? '') === 'GRADED') {
+        return 'GRADED';
+    }
+
     if (($assignment['status'] ?? '') === 'CLOSED') {
         return 'CLOSED';
     }
@@ -157,8 +161,74 @@ function student_can_view_coursework_assignment(int $studentId, array $assignmen
 
 function student_can_submit_coursework_assignment(int $studentId, array $assignment): bool
 {
-    return student_can_view_coursework_assignment($studentId, $assignment)
-        && assignment_is_open_for_submission($assignment);
+    if (!student_can_view_coursework_assignment($studentId, $assignment)
+        || !assignment_is_open_for_submission($assignment)
+    ) {
+        return false;
+    }
+
+    $existing = get_assignment_submission_for_student((int) $assignment['assignment_id'], $studentId);
+    if ($existing !== null && ($existing['status'] ?? '') === 'GRADED') {
+        return false;
+    }
+
+    return true;
+}
+
+function assignment_submission_is_graded(?array $submission): bool
+{
+    return $submission !== null && ($submission['status'] ?? '') === 'GRADED';
+}
+
+function format_assignment_grade_display(mixed $grade, mixed $maxMarks): string
+{
+    if ($grade === null || $grade === '') {
+        return 'Not graded yet';
+    }
+
+    return rtrim(rtrim(number_format((float) $grade, 2, '.', ''), '0'), '.')
+        . ' / '
+        . rtrim(rtrim(number_format((float) $maxMarks, 2, '.', ''), '0'), '.');
+}
+
+/**
+ * @throws InvalidArgumentException
+ */
+function parse_coursework_grade(mixed $raw, float $maxMarks): float
+{
+    if (is_int($raw) || is_float($raw)) {
+        $text = (string) $raw;
+    } elseif (is_string($raw)) {
+        $text = trim($raw);
+    } else {
+        throw new InvalidArgumentException('Grade must be a number.');
+    }
+
+    if ($text === '' || preg_match('/^-?\d+(\.\d+)?$/', $text) !== 1) {
+        throw new InvalidArgumentException('Grade must be a number.');
+    }
+
+    $grade = (float) $text;
+    if ($grade < 0) {
+        throw new InvalidArgumentException('Grade cannot be negative.');
+    }
+    if ($grade > $maxMarks) {
+        throw new InvalidArgumentException('Grade cannot be greater than the maximum marks.');
+    }
+
+    return round($grade, 2);
+}
+
+function lecturer_can_grade_submission(int $lecturerId, array $assignment, array $submission): bool
+{
+    return lecturer_can_manage_coursework_assignment($lecturerId, $assignment)
+        && (int) $submission['assignment_id'] === (int) $assignment['assignment_id'];
+}
+
+function student_can_view_submission_result(int $studentId, array $assignment, array $submission): bool
+{
+    return (int) $submission['student_id'] === $studentId
+        && student_can_view_coursework_assignment($studentId, $assignment);
 }
 
 function staff_can_monitor_coursework(): bool
@@ -229,6 +299,11 @@ function list_coursework_assignments_for_student(int $studentId): array
         $row['student_display_status'] = student_coursework_display_status($row, $submission);
         $row['own_submitted_at'] = $submission['submitted_at'] ?? null;
         $row['own_submission_status'] = $submission['status'] ?? null;
+        $row['own_grade'] = $submission['grade'] ?? null;
+        $row['own_feedback'] = $submission['feedback'] ?? null;
+        $row['own_grade_display'] = assignment_submission_is_graded($submission)
+            ? format_assignment_grade_display($submission['grade'] ?? null, $row['max_marks'])
+            : 'Not graded yet';
     }
     unset($row);
 
@@ -313,7 +388,8 @@ function list_assignment_submission_matrix(int $assignmentId): array
 
     $statement = db()->prepare(
         "SELECT s.student_id, s.registration_no, s.first_name, s.last_name,
-                sub.submission_id, sub.file_path, sub.submitted_at, sub.status AS submission_status
+                sub.submission_id, sub.file_path, sub.submitted_at, sub.status AS submission_status,
+                sub.grade, sub.feedback
          FROM student_modules sm
          INNER JOIN students s ON s.student_id = sm.student_id
          LEFT JOIN assignment_submissions sub
@@ -331,12 +407,16 @@ function list_assignment_submission_matrix(int $assignmentId): array
         if ($row['submission_id'] === null) {
             $row['matrix_status'] = 'NOT SUBMITTED';
             $row['timing'] = '—';
-        } elseif (assignment_submission_is_late($assignment, $row)) {
-            $row['matrix_status'] = 'LATE';
-            $row['timing'] = 'Late';
+            $row['grade_display'] = '—';
         } else {
-            $row['matrix_status'] = 'SUBMITTED';
-            $row['timing'] = 'On Time';
+            $row['timing'] = assignment_submission_is_late($assignment, $row) ? 'Late' : 'On Time';
+            if (($row['submission_status'] ?? '') === 'GRADED') {
+                $row['matrix_status'] = 'GRADED';
+                $row['grade_display'] = format_assignment_grade_display($row['grade'], $assignment['max_marks']);
+            } else {
+                $row['matrix_status'] = $row['timing'] === 'Late' ? 'LATE' : 'SUBMITTED';
+                $row['grade_display'] = 'Not graded';
+            }
         }
     }
     unset($row);
@@ -627,11 +707,19 @@ function assignment_assert_payload(array $data): void
 function save_student_assignment_submission(int $assignmentId, int $studentId, array $file): array
 {
     $assignment = get_coursework_assignment($assignmentId);
-    if ($assignment === null || !student_can_submit_coursework_assignment($studentId, $assignment)) {
+    if ($assignment === null || !student_can_view_coursework_assignment($studentId, $assignment)) {
         throw new InvalidArgumentException('You cannot submit this assignment.');
     }
 
     $existing = get_assignment_submission_for_student($assignmentId, $studentId);
+    if (assignment_submission_is_graded($existing)) {
+        throw new InvalidArgumentException('Graded submissions cannot be replaced.');
+    }
+
+    if (!assignment_is_open_for_submission($assignment)) {
+        throw new InvalidArgumentException('You cannot submit this assignment.');
+    }
+
     $stored = assignment_store_uploaded_file($file, 'submissions');
     $now = app_now_datetime();
     $status = parse_app_datetime($now) > parse_app_datetime((string) $assignment['due_date'])
@@ -798,4 +886,50 @@ function assignment_send_download(array $payload): never
 function assignment_download_url(string $routePrefix, string $kind, int $id): string
 {
     return app_url($routePrefix . '/assignments/download.php?type=' . rawurlencode($kind) . '&id=' . $id);
+}
+
+function assignment_grade_url(string $routePrefix, int $submissionId): string
+{
+    return app_url($routePrefix . '/assignments/grade.php?submission_id=' . $submissionId);
+}
+
+/**
+ * Grade an existing submission. Updates the same row. Does not write to marks.
+ *
+ * @return array<string, mixed>
+ */
+function grade_coursework_submission(int $lecturerId, int $submissionId, mixed $rawGrade, mixed $rawFeedback): array
+{
+    $submission = get_assignment_submission($submissionId);
+    if ($submission === null) {
+        throw new InvalidArgumentException('Submission not found.');
+    }
+
+    $assignment = get_coursework_assignment((int) $submission['assignment_id']);
+    if ($assignment === null || !lecturer_can_grade_submission($lecturerId, $assignment, $submission)) {
+        throw new InvalidArgumentException('You cannot grade this submission.');
+    }
+
+    $grade = parse_coursework_grade($rawGrade, (float) $assignment['max_marks']);
+    $feedback = is_string($rawFeedback) ? trim($rawFeedback) : '';
+    $feedback = $feedback === '' ? null : $feedback;
+
+    $statement = db()->prepare(
+        "UPDATE assignment_submissions
+         SET grade = :grade, feedback = :feedback, status = 'GRADED'
+         WHERE submission_id = :submission_id AND assignment_id = :assignment_id"
+    );
+    $statement->execute([
+        'grade' => $grade,
+        'feedback' => $feedback,
+        'submission_id' => $submissionId,
+        'assignment_id' => (int) $assignment['assignment_id'],
+    ]);
+
+    $updated = get_assignment_submission($submissionId);
+    if ($updated === null) {
+        throw new RuntimeException('Unable to save the grade.');
+    }
+
+    return $updated;
 }

@@ -31,12 +31,13 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
                     <th>Due</th>
                     <th>Max marks</th>
                     <th>Status</th>
+                    <th>Grade</th>
                     <th></th>
                 </tr>
             </thead>
             <tbody>
                 <?php if ($assignments === []): ?>
-                    <tr><td colspan="6" class="text-center text-muted py-4">No assignments available.</td></tr>
+                    <tr><td colspan="7" class="text-center text-muted py-4">No assignments available.</td></tr>
                 <?php else: ?>
                     <?php foreach ($assignments as $row): ?>
                         <tr>
@@ -45,6 +46,7 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
                             <td><?= e(format_assignment_datetime((string) $row['due_date'])) ?></td>
                             <td><?= e((string) $row['max_marks']) ?></td>
                             <td><span class="badge <?= e(status_badge_class((string) $row['student_display_status'])) ?>"><?= e((string) $row['student_display_status']) ?></span></td>
+                            <td><?= e((string) $row['own_grade_display']) ?></td>
                             <td>
                                 <a class="btn btn-sm btn-primary" href="<?= e(app_url('student/assignments/view.php?id=' . $row['assignment_id'])) ?>">Open</a>
                             </td>

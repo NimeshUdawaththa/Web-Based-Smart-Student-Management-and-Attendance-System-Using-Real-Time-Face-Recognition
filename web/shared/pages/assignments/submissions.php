@@ -54,13 +54,14 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
                     <th>Submission Status</th>
                     <th>Submitted At</th>
                     <th>Late / On Time</th>
+                    <th>Grade</th>
                     <th>File</th>
                     <th>Action</th>
                 </tr>
             </thead>
             <tbody>
                 <?php if ($rows === []): ?>
-                    <tr><td colspan="7" class="text-center text-muted py-4">No enrolled students for this module.</td></tr>
+                    <tr><td colspan="8" class="text-center text-muted py-4">No enrolled students for this module.</td></tr>
                 <?php else: ?>
                     <?php foreach ($rows as $row): ?>
                         <tr>
@@ -69,10 +70,18 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
                             <td><span class="badge <?= e(status_badge_class((string) $row['matrix_status'])) ?>"><?= e((string) $row['matrix_status']) ?></span></td>
                             <td><?= $row['submitted_at'] ? e(format_assignment_datetime((string) $row['submitted_at'])) : '—' ?></td>
                             <td><?= e((string) $row['timing']) ?></td>
+                            <td><?= e((string) $row['grade_display']) ?></td>
                             <td><?= $row['submission_id'] ? 'Attached' : '—' ?></td>
-                            <td>
+                            <td class="text-nowrap">
                                 <?php if ($row['submission_id']): ?>
                                     <a class="btn btn-sm btn-outline-primary" href="<?= e(assignment_download_url($academicRoutePrefix, 'submission', (int) $row['submission_id'])) ?>">Download</a>
+                                    <?php if ($courseworkCanEdit): ?>
+                                        <a class="btn btn-sm btn-primary" href="<?= e(assignment_grade_url($academicRoutePrefix, (int) $row['submission_id'])) ?>">
+                                            <?= ($row['matrix_status'] ?? '') === 'GRADED' ? 'Edit Grade' : 'Grade' ?>
+                                        </a>
+                                    <?php else: ?>
+                                        <a class="btn btn-sm btn-outline-secondary" href="<?= e(assignment_grade_url($academicRoutePrefix, (int) $row['submission_id'])) ?>">View result</a>
+                                    <?php endif; ?>
                                 <?php else: ?>
                                     —
                                 <?php endif; ?>
