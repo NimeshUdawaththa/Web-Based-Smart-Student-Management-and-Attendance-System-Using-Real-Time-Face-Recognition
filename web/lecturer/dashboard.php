@@ -108,6 +108,15 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
         <div class="col-md-6 col-lg-4">
             <div class="card shadow-sm h-100">
                 <div class="card-body">
+                    <h2 class="h5">Module Marks</h2>
+                    <p class="text-muted">Record quizzes, exams, and other module assessment results.</p>
+                    <a href="<?= e(app_url('lecturer/marks/index.php')) ?>" class="btn btn-primary btn-sm">Open</a>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6 col-lg-4">
+            <div class="card shadow-sm h-100">
+                <div class="card-body">
                     <h2 class="h5">Student Directory</h2>
                     <p class="text-muted">View student information.</p>
                     <a href="<?= e(app_url('lecturer/students/index.php')) ?>" class="btn btn-outline-primary btn-sm">View students</a>

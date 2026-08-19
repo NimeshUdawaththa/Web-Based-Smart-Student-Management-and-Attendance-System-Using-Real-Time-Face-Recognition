@@ -311,6 +311,50 @@ function list_coursework_assignments_for_student(int $studentId): array
 }
 
 /**
+ * Graded coursework for My Results. Read-only. Does not write to marks.
+ *
+ * @return list<array<string, mixed>>
+ */
+function list_graded_coursework_results_for_student(int $studentId): array
+{
+    $statement = db()->prepare(
+        "SELECT a.assignment_id, a.title, a.max_marks, a.module_id, a.status AS assignment_status,
+                m.module_code, m.module_name,
+                sub.submission_id, sub.student_id, sub.grade, sub.feedback, sub.status AS submission_status
+         FROM assignment_submissions sub
+         INNER JOIN assignments a ON a.assignment_id = sub.assignment_id
+         INNER JOIN modules m ON m.module_id = a.module_id
+         INNER JOIN student_modules sm
+            ON sm.module_id = a.module_id AND sm.student_id = sub.student_id
+         WHERE sub.student_id = :student_id
+           AND sub.status = 'GRADED'
+           AND sub.grade IS NOT NULL
+           AND sm.status = 'ENROLLED'
+           AND a.status <> 'DRAFT'
+         ORDER BY m.module_code, a.title"
+    );
+    $statement->execute(['student_id' => $studentId]);
+    $rows = $statement->fetchAll();
+
+    $visible = [];
+    foreach ($rows as $row) {
+        if ((int) $row['student_id'] !== $studentId) {
+            continue;
+        }
+        if (!student_can_view_submission_result($studentId, $row, $row)) {
+            continue;
+        }
+        $max = (float) $row['max_marks'];
+        $grade = (float) $row['grade'];
+        $row['percentage'] = $max > 0 ? round(($grade / $max) * 100, 1) : null;
+        $row['grade_display'] = format_assignment_grade_display($row['grade'], $row['max_marks']);
+        $visible[] = $row;
+    }
+
+    return $visible;
+}
+
+/**
  * @return list<array<string, mixed>>
  */
 function list_coursework_assignments_for_monitor(): array

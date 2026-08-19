@@ -113,6 +113,15 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
     <div class="col-md-6 col-lg-4">
         <div class="card shadow-sm h-100">
             <div class="card-body">
+                <h2 class="h5">Marks Monitor</h2>
+                <p class="text-muted">Read-only view of module assessment results.</p>
+                <a href="<?= e(app_url('academic-staff/marks/index.php')) ?>" class="btn btn-primary btn-sm">Open</a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6 col-lg-4">
+        <div class="card shadow-sm h-100">
+            <div class="card-body">
                 <h2 class="h5">Camera Management</h2>
                 <p class="text-muted">Start or stop the USB attendance camera.</p>
                 <a href="<?= e(app_url('academic-staff/camera.php')) ?>" class="btn btn-primary btn-sm">Open</a>
