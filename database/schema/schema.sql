@@ -566,6 +566,8 @@ CREATE TABLE marks (
 
 -- -----------------------------------------------------------------------------
 -- 18. announcements
+-- target_role is a deprecated v1 compatibility snapshot (NOT NULL leftover).
+-- Source of truth for audiences is announcement_targets.
 -- -----------------------------------------------------------------------------
 CREATE TABLE announcements (
   announcement_id INT UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -585,6 +587,23 @@ CREATE TABLE announcements (
   CONSTRAINT fk_announcements_created_by
     FOREIGN KEY (created_by) REFERENCES users (user_id)
     ON DELETE RESTRICT
+    ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- -----------------------------------------------------------------------------
+-- 18b. announcement_targets
+-- One row per individual audience role. ALL is not stored; it expands to four rows.
+-- -----------------------------------------------------------------------------
+CREATE TABLE announcement_targets (
+  announcement_target_id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  announcement_id INT UNSIGNED NOT NULL,
+  target_role ENUM('ADMIN', 'ACADEMIC_STAFF', 'LECTURER', 'STUDENT') NOT NULL,
+  PRIMARY KEY (announcement_target_id),
+  UNIQUE KEY uq_announcement_targets_announcement_role (announcement_id, target_role),
+  KEY idx_announcement_targets_role (target_role),
+  CONSTRAINT fk_announcement_targets_announcement
+    FOREIGN KEY (announcement_id) REFERENCES announcements (announcement_id)
+    ON DELETE CASCADE
     ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 

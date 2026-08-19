@@ -14,6 +14,7 @@ require_once dirname(__DIR__, 2) . '/shared/includes/attendance.php';
 require_once dirname(__DIR__, 2) . '/shared/includes/attendance-reports.php';
 require_once dirname(__DIR__, 2) . '/shared/includes/assignments.php';
 require_once dirname(__DIR__, 2) . '/shared/includes/marks.php';
+require_once dirname(__DIR__, 2) . '/shared/includes/announcements.php';
 require_once dirname(__DIR__, 2) . '/shared/includes/camera.php';
 
 start_secure_session();
