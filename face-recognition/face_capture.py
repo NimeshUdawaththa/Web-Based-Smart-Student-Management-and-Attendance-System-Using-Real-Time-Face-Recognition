@@ -10,6 +10,7 @@ import cv2
 import numpy as np
 
 import config
+from recognition import camera_runtime
 
 
 def _is_blurry(gray_face: np.ndarray) -> bool:
@@ -41,6 +42,12 @@ def capture_samples(student_id: int, progress_callback=None) -> dict:
     detector = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
 
     print(f'Opening camera index: {config.CAMERA_INDEX}', flush=True)
+    if not camera_runtime.try_acquire_camera_mutex():
+        error = 'Camera already running'
+        print(error, flush=True)
+        return {'success': False, 'sample_count': 0, 'save_dir': str(save_dir),
+                'cancelled': False, 'error': error}
+
     cap = None
     try:
         cap = cv2.VideoCapture(config.CAMERA_INDEX)
@@ -49,6 +56,7 @@ def capture_samples(student_id: int, progress_callback=None) -> dict:
     if cap is None or not cap.isOpened():
         if cap is not None:
             cap.release()
+        camera_runtime.release_camera_mutex()
         error = f'Could not open camera index {config.CAMERA_INDEX}'
         print(error, flush=True)
         return {'success': False, 'sample_count': 0, 'save_dir': str(save_dir),
@@ -105,6 +113,7 @@ def capture_samples(student_id: int, progress_callback=None) -> dict:
         if cap is not None:
             cap.release()
         cv2.destroyAllWindows()
+        camera_runtime.release_camera_mutex()
 
     if cancelled and captured < target:
         return {'success': False, 'sample_count': captured, 'save_dir': str(save_dir),

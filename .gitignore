@@ -29,6 +29,8 @@ face-recognition/captured_faces/*
 # Student Uploaded Files / Runtime Files
 web/uploads/*
 !web/uploads/.gitkeep
+face-recognition/runtime/*
+!face-recognition/runtime/.gitkeep
 logs/
 *.log
 

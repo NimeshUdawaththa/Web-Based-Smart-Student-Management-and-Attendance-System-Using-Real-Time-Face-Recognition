@@ -13,6 +13,7 @@ ENTRY or EXIT camera mode. Press E to toggle mode on a single test webcam.
 from __future__ import annotations
 
 import logging
+import os
 import sys
 import threading
 import time
@@ -29,6 +30,7 @@ if str(_ROOT) not in sys.path:
 
 import config
 from recognition.attendance_client import AttendanceDecision, submit_recognized_attendance, unknown_decision
+from recognition import camera_runtime
 from recognition.cooldown import RecognitionCooldown
 from recognition.matcher import MatchResult, match_encoding
 from recognition.metrics import RecognitionMetrics
@@ -215,10 +217,19 @@ def run_live_recognition(
     if cooldown is None:
         cooldown = RecognitionCooldown(config.RECOGNITION_COOLDOWN_SECONDS)
 
+    camera_runtime.configure_file_logging()
+    if not camera_runtime.try_acquire_camera_mutex():
+        error = 'Camera already running'
+        print(error, flush=True)
+        logger.error(error)
+        return {'success': False, 'error': error, 'cancelled': False, 'already_running': True}
+
     camera_index = config.CAMERA_INDEX
     message = f'Opening camera index: {camera_index}'
     print(message, flush=True)
     logger.info(message)
+    camera_runtime.mark_starting(os.getpid())
+    camera_runtime.clear_stop_request()
 
     cap = None
     try:
@@ -231,6 +242,18 @@ def run_live_recognition(
         error = f'Could not open camera index {camera_index}'
         print(error, flush=True)
         logger.error(error)
+        camera_runtime.mark_error(error, os.getpid())
+        camera_runtime.release_camera_mutex()
+        return {'success': False, 'error': error, 'cancelled': False}
+
+    ok, first_frame = cap.read()
+    if not ok or first_frame is None:
+        cap.release()
+        error = f'Could not open camera index {camera_index}'
+        print(error, flush=True)
+        logger.error(error)
+        camera_runtime.mark_error(error, os.getpid())
+        camera_runtime.release_camera_mutex()
         return {'success': False, 'error': error, 'cancelled': False}
 
     window_title = 'SmartAMS – Live Recognition (E mode, Q quit, R reload)'
@@ -242,7 +265,9 @@ def run_live_recognition(
     fps_t0 = time.perf_counter()
     cancelled = False
     attendance_cache: dict[int, AttendanceDecision] = {}
-    camera_mode = config.ATTENDANCE_CAMERA_MODE
+    camera_mode = camera_runtime.camera_mode()
+    camera_runtime.mark_online(os.getpid(), camera_mode)
+    last_heartbeat = 0.0
 
     logger.info(
         'Live recognition started (threshold=%.3f, match_k=%s, scale=%.2f, skip=%s)',
@@ -257,6 +282,22 @@ def run_live_recognition(
             if stop_event is not None and stop_event.is_set():
                 cancelled = True
                 break
+            if camera_runtime.stop_requested():
+                logger.info('Stop requested from Camera Management')
+                cancelled = True
+                break
+
+            requested_mode = camera_runtime.camera_mode()
+            if requested_mode != camera_mode:
+                camera_mode = requested_mode
+                attendance_cache.clear()
+                cooldown.clear()
+                logger.info('Camera mode set to %s', camera_mode)
+
+            now_mono = time.perf_counter()
+            if now_mono - last_heartbeat >= 1.0:
+                camera_runtime.heartbeat(os.getpid(), camera_mode)
+                last_heartbeat = now_mono
 
             ok, frame = cap.read()
             if not ok:
@@ -299,6 +340,7 @@ def run_live_recognition(
             key = cv2.waitKey(1) & 0xFF
             if key in (ord('e'), ord('E')):
                 camera_mode = 'EXIT' if camera_mode == 'ENTRY' else 'ENTRY'
+                camera_runtime.set_camera_mode(camera_mode)
                 attendance_cache.clear()
                 cooldown.clear()
                 logger.info('Camera mode set to %s', camera_mode)
@@ -316,6 +358,8 @@ def run_live_recognition(
         if cap is not None:
             cap.release()
         cv2.destroyAllWindows()
+        camera_runtime.mark_offline()
+        camera_runtime.release_camera_mutex()
         logger.info('Live recognition stopped; camera released')
 
     snapshot = metrics.snapshot()
@@ -332,10 +376,12 @@ def main() -> int:
         level=logging.INFO,
         format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',
     )
+    camera_runtime.configure_file_logging()
     try:
         reload_gallery()
     except Exception:
         logger.exception('Could not load enrolled face profiles. Is MySQL running?')
+        camera_runtime.mark_error('Could not load enrolled face profiles')
         return 1
 
     result = run_live_recognition()
