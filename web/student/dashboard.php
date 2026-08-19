@@ -66,6 +66,15 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
                 </div>
             </div>
         </div>
+        <div class="col-md-6 col-lg-4">
+            <div class="card shadow-sm h-100">
+                <div class="card-body">
+                    <h2 class="h5">My Assignments</h2>
+                    <p class="text-muted">View instructions and submit work for modules you are enrolled in.</p>
+                    <a href="<?= e(app_url('student/assignments/index.php')) ?>" class="btn btn-primary btn-sm">Open</a>
+                </div>
+            </div>
+        </div>
     </div>
 <?php endif; ?>
 

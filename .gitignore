@@ -29,6 +29,7 @@ face-recognition/captured_faces/*
 # Student Uploaded Files / Runtime Files
 web/uploads/*
 !web/uploads/.gitkeep
+!web/uploads/.htaccess
 face-recognition/runtime/*
 !face-recognition/runtime/.gitkeep
 logs/

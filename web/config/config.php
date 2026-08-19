@@ -11,6 +11,10 @@ define('CONFIG_PATH', WEB_PATH . '/config');
 define('PUBLIC_PATH', WEB_PATH . '/public');
 define('INCLUDES_PATH', WEB_PATH . '/shared/includes');
 define('UPLOADS_PATH', WEB_PATH . '/uploads');
+define(
+    'ASSIGNMENT_UPLOAD_MAX_BYTES',
+    max(1, (int) (env('ASSIGNMENT_UPLOAD_MAX_BYTES', '10485760') ?? '10485760'))
+);
 
 define('APP_NAME', env('APP_NAME', 'Smart Student Management') ?? 'Smart Student Management');
 define('APP_ENV', env('APP_ENV', 'local') ?? 'local');
