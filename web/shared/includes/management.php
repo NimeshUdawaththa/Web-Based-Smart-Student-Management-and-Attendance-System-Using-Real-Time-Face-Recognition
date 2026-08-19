@@ -964,6 +964,7 @@ function management_nav_items(string $role): array
             ['label' => 'Coursework Monitor', 'href' => app_url('admin/assignments/index.php')],
             ['label' => 'Marks Monitor', 'href' => app_url('admin/marks/index.php')],
             ['label' => 'Announcements', 'href' => app_url('admin/announcements/index.php')],
+            ['label' => 'Events', 'href' => app_url('admin/events/index.php')],
             ['label' => 'Camera Management', 'href' => app_url('admin/camera.php')],
         ],
         'ACADEMIC_STAFF' => [
@@ -979,6 +980,7 @@ function management_nav_items(string $role): array
             ['label' => 'Coursework Monitor', 'href' => app_url('academic-staff/assignments/index.php')],
             ['label' => 'Marks Monitor', 'href' => app_url('academic-staff/marks/index.php')],
             ['label' => 'Announcements', 'href' => app_url('academic-staff/announcements/index.php')],
+            ['label' => 'Events', 'href' => app_url('academic-staff/events/index.php')],
             ['label' => 'Camera Management', 'href' => app_url('academic-staff/camera.php')],
         ],
         'LECTURER' => [
@@ -990,6 +992,7 @@ function management_nav_items(string $role): array
             ['label' => 'Coursework Assignments', 'href' => app_url('lecturer/assignments/index.php')],
             ['label' => 'Module Marks', 'href' => app_url('lecturer/marks/index.php')],
             ['label' => 'Announcements', 'href' => app_url('lecturer/announcements/index.php')],
+            ['label' => 'Events', 'href' => app_url('lecturer/events/index.php')],
         ],
         'STUDENT' => [
             ['label' => 'Dashboard', 'href' => app_url('student/dashboard.php')],
@@ -998,6 +1001,7 @@ function management_nav_items(string $role): array
             ['label' => 'My Assignments', 'href' => app_url('student/assignments/index.php')],
             ['label' => 'My Results', 'href' => app_url('student/results/index.php')],
             ['label' => 'Announcements', 'href' => app_url('student/announcements/index.php')],
+            ['label' => 'Events', 'href' => app_url('student/events/index.php')],
         ],
         default => [
             ['label' => 'Dashboard', 'href' => app_url(role_dashboard_path($role))],
@@ -1008,11 +1012,11 @@ function management_nav_items(string $role): array
 function status_badge_class(string $status): string
 {
     return match ($status) {
-        'ACTIVE', 'ENROLLED', 'IN_PROGRESS', 'PROMOTED', 'PRESENT', 'PUBLISHED', 'SUBMITTED', 'GRADED', 'Recorded', 'Active' => 'text-bg-success',
-        'INACTIVE', 'NOT ENROLLED', 'COMPLETED', 'DRAFT', 'NOT SUBMITTED', 'Not Recorded', 'ARCHIVED' => 'text-bg-secondary',
+        'ACTIVE', 'ENROLLED', 'IN_PROGRESS', 'PROMOTED', 'PRESENT', 'PUBLISHED', 'SUBMITTED', 'GRADED', 'Recorded', 'Active', 'Upcoming', 'Ongoing' => 'text-bg-success',
+        'INACTIVE', 'NOT ENROLLED', 'COMPLETED', 'DRAFT', 'NOT SUBMITTED', 'Not Recorded', 'ARCHIVED', 'Past' => 'text-bg-secondary',
         'SCHEDULED', 'OPEN' => 'text-bg-primary',
         'SUSPENDED', 'DROPPED', 'LATE', 'Expired', 'Scheduled' => 'text-bg-warning',
-        'CANCELLED', 'ABSENT', 'CLOSED' => 'text-bg-danger',
+        'CANCELLED', 'ABSENT', 'CLOSED', 'Cancelled' => 'text-bg-danger',
         'GRADUATED' => 'text-bg-info',
         default => 'text-bg-light',
     };

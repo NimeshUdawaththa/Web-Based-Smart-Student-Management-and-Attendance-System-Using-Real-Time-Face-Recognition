@@ -9,6 +9,7 @@ require_role('ACADEMIC_STAFF');
 $pageTitle = 'Academic Staff Dashboard';
 $user = current_user();
 $activeAnnouncementCount = count_currently_active_announcements();
+$upcomingCampusEventCount = count_upcoming_campus_events();
 $today = app_today();
 $todaySessions = list_lecture_sessions(['from' => $today, 'to' => $today]);
 $upcomingSessions = list_lecture_sessions(['upcoming' => true]);
@@ -126,6 +127,15 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
                 <h2 class="h5">Announcements</h2>
                 <p class="text-muted mb-2"><?= (int) $activeAnnouncementCount ?> currently active notice<?= $activeAnnouncementCount === 1 ? '' : 's' ?>.</p>
                 <a href="<?= e(app_url('academic-staff/announcements/index.php')) ?>" class="btn btn-primary btn-sm">Manage</a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6 col-lg-4">
+        <div class="card shadow-sm h-100">
+            <div class="card-body">
+                <h2 class="h5">Events</h2>
+                <p class="text-muted mb-2"><?= (int) $upcomingCampusEventCount ?> upcoming published event<?= $upcomingCampusEventCount === 1 ? '' : 's' ?>.</p>
+                <a href="<?= e(app_url('academic-staff/events/index.php')) ?>" class="btn btn-primary btn-sm">Manage</a>
             </div>
         </div>
     </div>

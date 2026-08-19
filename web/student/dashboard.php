@@ -13,6 +13,7 @@ $today = app_today();
 $todaySessions = [];
 $upcomingSessions = [];
 $recentAnnouncements = list_visible_announcements_for_role('STUDENT', 3);
+$upcomingCampusEvents = list_campus_events_for_role('STUDENT', 'upcoming', 3);
 
 if ($student !== null) {
     $todaySessions = list_visible_sessions_for_student((int) $student['student_id'], [
@@ -102,6 +103,27 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
                     <li class="mb-2">
                         <a href="<?= e(app_url('student/announcements/view.php?id=' . $notice['announcement_id'])) ?>"><?= e((string) $notice['title']) ?></a>
                         <div class="small text-muted"><?= e(format_announcement_datetime(isset($notice['published_at']) ? (string) $notice['published_at'] : null)) ?></div>
+                    </li>
+                <?php endforeach; ?>
+            </ul>
+        <?php endif; ?>
+    </div>
+</div>
+
+<div class="card shadow-sm mb-4">
+    <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <h2 class="h5 mb-0">Upcoming Events</h2>
+            <a href="<?= e(app_url('student/events/index.php')) ?>" class="btn btn-outline-primary btn-sm">View All</a>
+        </div>
+        <?php if ($upcomingCampusEvents === []): ?>
+            <p class="text-muted mb-0">No upcoming events right now.</p>
+        <?php else: ?>
+            <ul class="list-unstyled mb-0">
+                <?php foreach ($upcomingCampusEvents as $campusEvent): ?>
+                    <li class="mb-2">
+                        <a href="<?= e(app_url('student/events/view.php?id=' . $campusEvent['campus_event_id'])) ?>"><?= e((string) $campusEvent['title']) ?></a>
+                        <div class="small text-muted"><?= e(format_campus_event_datetime(isset($campusEvent['start_datetime']) ? (string) $campusEvent['start_datetime'] : null)) ?></div>
                     </li>
                 <?php endforeach; ?>
             </ul>
