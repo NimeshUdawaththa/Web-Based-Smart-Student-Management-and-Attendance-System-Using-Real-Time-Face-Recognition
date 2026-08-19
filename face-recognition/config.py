@@ -29,7 +29,13 @@ TARGET_SAMPLES = 25
 MIN_FACE_SIZE = 80          # pixels – minimum width/height of detected face box
 BLUR_THRESHOLD = 50.0       # Laplacian variance; below this is considered blurry
 CAPTURE_INTERVAL_MS = 400   # minimum milliseconds between saved frames
-CAMERA_INDEX = 0
+# One OpenCV camera at a time. 0 = usually laptop, 1 = usually USB webcam.
+try:
+    CAMERA_INDEX = int((os.getenv('FACE_CAMERA_INDEX') or '0').strip())
+except ValueError:
+    CAMERA_INDEX = 0
+if CAMERA_INDEX < 0:
+    CAMERA_INDEX = 0
 
 # --- Storage paths ---
 DATASET_DIR = BASE_DIR / 'dataset'

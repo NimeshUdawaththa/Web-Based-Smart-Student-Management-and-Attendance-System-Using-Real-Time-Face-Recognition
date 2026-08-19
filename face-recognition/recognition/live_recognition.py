@@ -189,9 +189,10 @@ def _attendance_for_match(
 
 def _draw_hud(frame: np.ndarray, gallery: FaceGallery, fps: float, processing_ms: float | None, camera_mode: str) -> None:
     lines = [
+        f'Camera: {config.CAMERA_INDEX}   Mode: {camera_mode}',
         f'Enrolled: {gallery.student_count}  skipped: {len(gallery.skipped)}  threshold: {config.MATCH_THRESHOLD:.2f}',
         f'FPS: {fps:.1f}  last process: {processing_ms:.0f} ms' if processing_ms is not None else f'FPS: {fps:.1f}',
-        f'Camera mode: {camera_mode}   E toggle ENTRY/EXIT   Q quit   R reload',
+        f'E toggle ENTRY/EXIT   Q quit   R reload',
     ]
     y = 24
     for line in lines:
@@ -214,10 +215,23 @@ def run_live_recognition(
     if cooldown is None:
         cooldown = RecognitionCooldown(config.RECOGNITION_COOLDOWN_SECONDS)
 
-    cap = cv2.VideoCapture(config.CAMERA_INDEX)
-    if not cap.isOpened():
-        logger.error('Cannot open camera index %s', config.CAMERA_INDEX)
-        return {'success': False, 'error': 'Cannot open camera', 'cancelled': False}
+    camera_index = config.CAMERA_INDEX
+    message = f'Opening camera index: {camera_index}'
+    print(message, flush=True)
+    logger.info(message)
+
+    cap = None
+    try:
+        cap = cv2.VideoCapture(camera_index)
+    except Exception:
+        cap = None
+    if cap is None or not cap.isOpened():
+        if cap is not None:
+            cap.release()
+        error = f'Could not open camera index {camera_index}'
+        print(error, flush=True)
+        logger.error(error)
+        return {'success': False, 'error': error, 'cancelled': False}
 
     window_title = 'SmartAMS – Live Recognition (E mode, Q quit, R reload)'
     frame_index = 0
@@ -299,7 +313,8 @@ def run_live_recognition(
                     logger.exception('Failed to reload face profiles')
 
     finally:
-        cap.release()
+        if cap is not None:
+            cap.release()
         cv2.destroyAllWindows()
         logger.info('Live recognition stopped; camera released')
 
@@ -325,7 +340,9 @@ def main() -> int:
 
     result = run_live_recognition()
     if not result.get('success'):
-        logger.error(result.get('error', 'Recognition failed'))
+        error = str(result.get('error') or 'Recognition failed')
+        print(error, flush=True)
+        logger.error(error)
         return 1
     return 0
 

@@ -40,10 +40,19 @@ def capture_samples(student_id: int, progress_callback=None) -> dict:
 
     detector = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
 
-    cap = cv2.VideoCapture(config.CAMERA_INDEX)
-    if not cap.isOpened():
+    print(f'Opening camera index: {config.CAMERA_INDEX}', flush=True)
+    cap = None
+    try:
+        cap = cv2.VideoCapture(config.CAMERA_INDEX)
+    except Exception:
+        cap = None
+    if cap is None or not cap.isOpened():
+        if cap is not None:
+            cap.release()
+        error = f'Could not open camera index {config.CAMERA_INDEX}'
+        print(error, flush=True)
         return {'success': False, 'sample_count': 0, 'save_dir': str(save_dir),
-                'cancelled': False, 'error': 'Cannot open camera'}
+                'cancelled': False, 'error': error}
 
     captured = 0
     last_capture_time = 0.0
@@ -93,7 +102,8 @@ def capture_samples(student_id: int, progress_callback=None) -> dict:
                 break
 
     finally:
-        cap.release()
+        if cap is not None:
+            cap.release()
         cv2.destroyAllWindows()
 
     if cancelled and captured < target:
