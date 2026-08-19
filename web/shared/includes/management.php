@@ -960,6 +960,7 @@ function management_nav_items(string $role): array
             ['label' => 'Module Enrollment', 'href' => app_url('admin/enrollments/index.php')],
             ['label' => 'Timetable', 'href' => app_url('admin/schedules/index.php')],
             ['label' => 'Lecture Sessions', 'href' => app_url('admin/sessions/index.php')],
+            ['label' => 'Attendance Reports', 'href' => app_url('admin/attendance/reports.php')],
             ['label' => 'Camera Management', 'href' => app_url('admin/camera.php')],
         ],
         'ACADEMIC_STAFF' => [
@@ -971,6 +972,7 @@ function management_nav_items(string $role): array
             ['label' => 'Module Enrollment', 'href' => app_url('academic-staff/enrollments/index.php')],
             ['label' => 'Timetable', 'href' => app_url('academic-staff/schedules/index.php')],
             ['label' => 'Lecture Sessions', 'href' => app_url('academic-staff/sessions/index.php')],
+            ['label' => 'Attendance Reports', 'href' => app_url('academic-staff/attendance/reports.php')],
             ['label' => 'Camera Management', 'href' => app_url('academic-staff/camera.php')],
         ],
         'LECTURER' => [
@@ -978,6 +980,7 @@ function management_nav_items(string $role): array
             ['label' => 'Students', 'href' => app_url('lecturer/students/index.php')],
             ['label' => 'My Timetable', 'href' => app_url('lecturer/schedules/index.php')],
             ['label' => 'Lecture Sessions', 'href' => app_url('lecturer/sessions/index.php')],
+            ['label' => 'Attendance Reports', 'href' => app_url('lecturer/attendance/reports.php')],
         ],
         'STUDENT' => [
             ['label' => 'Dashboard', 'href' => app_url('student/dashboard.php')],
