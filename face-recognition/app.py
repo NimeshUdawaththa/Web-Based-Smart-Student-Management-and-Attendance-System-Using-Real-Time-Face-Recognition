@@ -10,6 +10,7 @@ from flask import Flask, jsonify, request
 from flask_cors import CORS
 
 import config
+import dataset_cleanup
 import db
 import face_capture
 import face_encoder
@@ -147,18 +148,46 @@ def enrollment_start():
                 sample_count=capture_result['sample_count'],
             )
 
-            try:
-                reload_gallery()
-            except Exception:
-                logger.exception('Enrollment completed but face gallery reload failed')
+            cleanup_warning = None
+            ready, ready_reason = dataset_cleanup.verify_enrollment_ready_for_cleanup(student_id)
+            if not ready:
+                logger.warning(
+                    'Enrollment succeeded but dataset cleanup skipped for student_id=%s: %s',
+                    student_id,
+                    ready_reason,
+                )
+                cleanup_warning = (
+                    'Enrollment succeeded but temporary face samples were kept '
+                    '(encoding verification incomplete).'
+                )
+            else:
+                try:
+                    reload_gallery()
+                except Exception:
+                    logger.exception('Enrollment completed but face gallery reload failed')
+
+                cleanup_result = dataset_cleanup.cleanup_student_dataset(student_id)
+                if not cleanup_result.get('success'):
+                    logger.warning(
+                        'Enrollment succeeded but temporary face samples could not be removed '
+                        'for student_id=%s: %s',
+                        student_id,
+                        cleanup_result.get('error'),
+                    )
+                    cleanup_warning = (
+                        'Enrollment succeeded but temporary face samples could not be removed.'
+                    )
 
             with _session_lock:
-                _sessions[student_id].update({
+                session_payload = {
                     'status': 'completed',
                     'captured': capture_result['sample_count'],
                     'encodings': enc_result['encoding_count'],
                     'error': None,
-                })
+                }
+                if cleanup_warning:
+                    session_payload['cleanup_warning'] = cleanup_warning
+                _sessions[student_id].update(session_payload)
 
         except Exception as exc:
             with _session_lock:

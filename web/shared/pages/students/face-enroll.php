@@ -85,6 +85,7 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
         </div>
 
         <div id="enrollment-result" class="mt-3 d-none"></div>
+        <div id="enrollment-cleanup-warning" class="mt-2 d-none"></div>
     </div>
 </div>
 
@@ -100,6 +101,7 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
     const progressBar = document.getElementById('progress-bar');
     const progressText = document.getElementById('progress-text');
     const resultEl = document.getElementById('enrollment-result');
+    const cleanupWarningEl = document.getElementById('enrollment-cleanup-warning');
     const badgeEl = document.getElementById('face-status-badge');
 
     let pollTimer = null;
@@ -126,6 +128,8 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
         btnStart.disabled = true;
         btnSpinner.classList.remove('d-none');
         resultEl.classList.add('d-none');
+        cleanupWarningEl.classList.add('d-none');
+        cleanupWarningEl.textContent = '';
 
         try {
             const resp = await fetch(SERVICE_URL + '/api/enrollment/start', {
@@ -179,6 +183,9 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
                 progressBar.textContent = 'Complete';
                 progressText.textContent = '';
                 showResult('success', 'Face enrollment completed successfully! ' + (data.encodings || '') + ' embeddings generated from ' + (data.captured || '') + ' samples.');
+                if (data.cleanup_warning) {
+                    showSecondaryWarning(data.cleanup_warning);
+                }
                 badgeEl.textContent = 'ENROLLED';
                 badgeEl.className = 'badge bg-success';
                 btnSpinner.classList.add('d-none');
@@ -211,6 +218,12 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
         resultEl.className = 'mt-3 alert alert-' + type;
         resultEl.textContent = message;
         resultEl.classList.remove('d-none');
+    }
+
+    function showSecondaryWarning(message) {
+        cleanupWarningEl.className = 'mt-2 alert alert-warning';
+        cleanupWarningEl.textContent = message;
+        cleanupWarningEl.classList.remove('d-none');
     }
 
     btnStart.addEventListener('click', startEnrollment);

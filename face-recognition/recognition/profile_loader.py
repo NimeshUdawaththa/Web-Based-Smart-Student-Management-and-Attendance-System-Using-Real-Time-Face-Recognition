@@ -215,3 +215,14 @@ def _load_encoding_array(path: Path, expected_student_id: int) -> np.ndarray | N
         return None
 
     return array
+
+
+def verify_encoding_for_student(student_id: int, encoding_path: str) -> bool:
+    """
+    True when encoding_path resolves under ENCODINGS_DIR and loads as a valid
+    embedding payload for this student_id. Used before deleting raw samples.
+    """
+    encoding_file = resolve_encoding_file(encoding_path)
+    if encoding_file is None or not encoding_file.is_file():
+        return False
+    return _load_encoding_array(encoding_file, student_id) is not None
