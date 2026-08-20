@@ -259,6 +259,74 @@ function change_own_password(
     ]);
 }
 
+/**
+ * Administrative password reset for a STUDENT account.
+ * Target is always resolved from student_id → linked user_id.
+ * Posted user_id / role / username fields must be ignored by callers.
+ */
+function admin_reset_student_password(int $studentId, string $newPassword, string $confirmPassword): void
+{
+    if ($studentId <= 0) {
+        throw new InvalidArgumentException('Student not found.');
+    }
+
+    $student = get_student($studentId);
+    if ($student === null) {
+        throw new InvalidArgumentException('Student not found.');
+    }
+
+    $userId = (int) $student['user_id'];
+    $statement = db()->prepare(
+        'SELECT user_id, password_hash, role, status
+         FROM users
+         WHERE user_id = :user_id
+         LIMIT 1'
+    );
+    $statement->execute(['user_id' => $userId]);
+    $user = $statement->fetch();
+    if ($user === false) {
+        throw new InvalidArgumentException('Linked user account not found.');
+    }
+    if ((string) $user['role'] !== 'STUDENT') {
+        throw new InvalidArgumentException('Password reset is only allowed for student accounts.');
+    }
+
+    if ($newPassword === '' || $confirmPassword === '') {
+        throw new InvalidArgumentException('Enter and confirm a new password.');
+    }
+    if ($newPassword !== $confirmPassword) {
+        throw new InvalidArgumentException('New password and confirmation do not match.');
+    }
+    if (!password_meets_policy($newPassword)) {
+        throw new InvalidArgumentException(
+            'New password must be at least ' . PROFILE_PASSWORD_MIN_LENGTH . ' characters.'
+        );
+    }
+
+    if (is_string($user['password_hash']) && password_verify($newPassword, $user['password_hash'])) {
+        throw new InvalidArgumentException('Choose a different password from the current one.');
+    }
+
+    $update = db()->prepare(
+        'UPDATE users SET password_hash = :password_hash WHERE user_id = :user_id AND role = \'STUDENT\''
+    );
+    $update->execute([
+        'password_hash' => password_hash($newPassword, PASSWORD_DEFAULT),
+        'user_id' => $userId,
+    ]);
+
+    if ($update->rowCount() < 1) {
+        $verify = db()->prepare(
+            'SELECT password_hash FROM users WHERE user_id = :user_id AND role = \'STUDENT\' LIMIT 1'
+        );
+        $verify->execute(['user_id' => $userId]);
+        $hash = $verify->fetchColumn();
+        if (!is_string($hash) || !password_verify($newPassword, $hash)) {
+            throw new RuntimeException('Unable to reset the student password.');
+        }
+    }
+}
+
 const PROFILE_PHOTO_MAX_DIMENSION = 800;
 
 /**
