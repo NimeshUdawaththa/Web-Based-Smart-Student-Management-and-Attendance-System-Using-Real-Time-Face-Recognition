@@ -46,7 +46,13 @@ $currentPath = parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH) ?: '';
                 ><?= e($item['label']) ?></a>
             <?php endforeach; ?>
         </nav>
-        <form method="post" action="<?= e(app_url('logout.php')) ?>" class="mt-4">
+        <?php if ($user !== null): ?>
+            <a
+                class="nav-link text-white <?= str_ends_with(rtrim($currentPath, '/'), '/profile.php') ? 'active-sidebar-link' : 'text-white-50' ?> mt-3"
+                href="<?= e(app_url(role_profile_path((string) $user['role']))) ?>"
+            >My Profile</a>
+        <?php endif; ?>
+        <form method="post" action="<?= e(app_url('logout.php')) ?>" class="mt-3">
             <?= csrf_field() ?>
             <button type="submit" class="btn btn-outline-light btn-sm w-100">Logout</button>
         </form>
