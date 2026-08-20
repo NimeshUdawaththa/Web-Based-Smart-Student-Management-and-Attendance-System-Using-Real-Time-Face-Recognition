@@ -398,9 +398,11 @@ try {
     $studentTimetable = file_get_contents(dirname(__DIR__, 2) . '/web/shared/pages/timetable/student.php');
     assert_true(
         is_string($studentTimetable)
-        && str_contains($studentTimetable, 'list_student_schedules')
+        && str_contains($studentTimetable, 'list_visible_sessions_for_student')
+        && !str_contains($studentTimetable, 'list_student_schedules')
+        && !str_contains($studentTimetable, 'Weekly Timetable')
         && !str_contains($studentTimetable, 'list_lecture_sessions'),
-        'R Student timetable remains unchanged'
+        'R Student timetable uses lecture_sessions only (no legacy weekly schedules)'
     );
 
     assert_true(

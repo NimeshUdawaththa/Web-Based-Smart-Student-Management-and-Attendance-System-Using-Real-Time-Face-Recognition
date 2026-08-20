@@ -36,7 +36,7 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
             <div class="card shadow-sm h-100">
                 <div class="card-body">
                     <h2 class="h5">My Timetable</h2>
-                    <p class="text-muted">Weekly slots for modules you are enrolled in.</p>
+                    <p class="text-muted">Today's and upcoming lectures for modules you are enrolled in.</p>
                     <a href="<?= e(app_url('student/timetable.php')) ?>" class="btn btn-primary btn-sm">Open</a>
                 </div>
             </div>

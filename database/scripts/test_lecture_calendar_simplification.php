@@ -243,9 +243,10 @@ try {
     $studentTimetable = (string) file_get_contents(dirname(__DIR__, 2) . '/web/shared/pages/timetable/student.php');
     assert_true(
         str_contains($studentTimetable, 'list_visible_sessions_for_student')
-        && str_contains($studentTimetable, 'list_student_schedules')
+        && !str_contains($studentTimetable, 'list_student_schedules')
+        && !str_contains($studentTimetable, 'Weekly Timetable')
         && !str_contains($studentTimetable, 'list_lecture_sessions'),
-        'T Student timetable remains functional/unchanged'
+        'T Student timetable uses lecture_sessions only (no legacy weekly schedules)'
     );
 
     $schedulesTable = db()->query("SHOW TABLES LIKE 'schedules'")->fetchColumn();

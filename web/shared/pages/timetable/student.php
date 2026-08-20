@@ -18,7 +18,6 @@ if ($student === null) {
 
 $pageTitle = 'My Timetable';
 $today = app_today();
-$schedules = list_student_schedules((int) $student['student_id']);
 $todaySessions = list_visible_sessions_for_student((int) $student['student_id'], [
     'from' => $today,
     'to' => $today,
@@ -111,41 +110,6 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
                                     <div class="small text-muted"><?= e($hint) ?></div>
                                 <?php endif; ?>
                             </td>
-                        </tr>
-                    <?php endforeach; ?>
-                <?php endif; ?>
-            </tbody>
-        </table>
-    </div>
-</div>
-
-<div class="card shadow-sm">
-    <div class="card-header bg-white"><h2 class="h6 mb-0">Weekly Timetable</h2></div>
-    <div class="table-responsive">
-        <table class="table mb-0 align-middle">
-            <thead class="table-light">
-                <tr>
-                    <th>Day</th>
-                    <th>Time</th>
-                    <th>Module</th>
-                    <th>Lecturer</th>
-                    <th>Room</th>
-                </tr>
-            </thead>
-            <tbody>
-                <?php if ($schedules === []): ?>
-                    <tr><td colspan="5" class="text-center text-muted py-3">No timetable entries for your enrolled modules.</td></tr>
-                <?php else: ?>
-                    <?php foreach ($schedules as $schedule): ?>
-                        <tr>
-                            <td><?= e(ucfirst(strtolower($schedule['day_of_week']))) ?></td>
-                            <td>
-                                <?= e(format_time_display($schedule['start_time']) . ' – ' . format_time_display($schedule['end_time'])) ?>
-                                <div class="small text-muted">Break: <?= e(format_break_display($schedule['break_start'] ?? null, $schedule['break_end'] ?? null)) ?></div>
-                            </td>
-                            <td><?= e($schedule['module_code'] . ' – ' . $schedule['module_name']) ?></td>
-                            <td><?= e($schedule['lecturer_first_name'] . ' ' . $schedule['lecturer_last_name']) ?></td>
-                            <td><?= e($schedule['room'] ?: '-') ?></td>
                         </tr>
                     <?php endforeach; ?>
                 <?php endif; ?>
