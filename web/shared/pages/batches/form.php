@@ -99,50 +99,56 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
         <?php if ($isEdit): ?>
             <input type="hidden" name="batch_id" value="<?= e((string) $batchId) ?>">
         <?php endif; ?>
-        <div class="row g-3">
-            <div class="col-md-6">
-                <label for="course_id" class="form-label">Course</label>
-                <?php if ($isEdit): ?>
-                    <input type="text" class="form-control" id="course_id" value="<?= e($batch['course_code'] . ' - ' . $batch['course_name']) ?>" disabled>
-                    <div class="form-text">The course cannot be changed after a batch is created.</div>
-                <?php else: ?>
-                    <select class="form-select" id="course_id" name="course_id" required>
-                        <option value="">Select course</option>
-                        <?php foreach ($activeCourses as $course): ?>
-                            <option value="<?= e((string) $course['course_id']) ?>" <?= $form['course_id'] === (string) $course['course_id'] ? 'selected' : '' ?>>
-                                <?= e($course['course_code'] . ' - ' . $course['course_name']) ?>
-                            </option>
+        <p class="app-required-note"><span class="app-required-note__mark" aria-hidden="true">*</span> <span class="visually-hidden">Asterisk means </span>Required</p>
+
+        <div class="app-form-section">
+            <h2 class="app-form-section__title">Batch Details</h2>
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label for="course_id" class="form-label<?= $isEdit ? '' : ' app-required' ?>">Course</label>
+                    <?php if ($isEdit): ?>
+                        <input type="text" class="form-control" id="course_id" value="<?= e($batch['course_code'] . ' - ' . $batch['course_name']) ?>" disabled>
+                        <div class="form-text">The course cannot be changed after a batch is created.</div>
+                    <?php else: ?>
+                        <select class="form-select" id="course_id" name="course_id" required>
+                            <option value="">Select course</option>
+                            <?php foreach ($activeCourses as $course): ?>
+                                <option value="<?= e((string) $course['course_id']) ?>" <?= $form['course_id'] === (string) $course['course_id'] ? 'selected' : '' ?>>
+                                    <?= e($course['course_code'] . ' - ' . $course['course_name']) ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    <?php endif; ?>
+                </div>
+                <div class="col-md-6">
+                    <label for="batch_name" class="form-label app-required">Batch Name</label>
+                    <input type="text" class="form-control" id="batch_name" name="batch_name" maxlength="100" value="<?= e($form['batch_name']) ?>" required>
+                </div>
+                <div class="col-md-4">
+                    <label for="intake_year" class="form-label app-required">Intake Year</label>
+                    <input type="number" class="form-control" id="intake_year" name="intake_year" min="<?= e((string) intake_year_min()) ?>" max="<?= e((string) intake_year_max()) ?>" value="<?= e($form['intake_year']) ?>" required>
+                </div>
+                <div class="col-md-4">
+                    <label for="start_date" class="form-label app-required">Start Date</label>
+                    <input type="date" class="form-control" id="start_date" name="start_date" value="<?= e($form['start_date']) ?>" required>
+                </div>
+                <div class="col-md-4">
+                    <label for="end_date" class="form-label">End Date</label>
+                    <input type="date" class="form-control" id="end_date" name="end_date" value="<?= e($form['end_date']) ?>">
+                    <div class="form-text">Optional. Leave blank if the intake has no planned end date.</div>
+                </div>
+                <div class="col-md-4">
+                    <label for="status" class="form-label">Status</label>
+                    <select class="form-select" id="status" name="status">
+                        <?php foreach (batch_statuses() as $batchStatus): ?>
+                            <option value="<?= e($batchStatus) ?>" <?= $form['status'] === $batchStatus ? 'selected' : '' ?>><?= e($batchStatus) ?></option>
                         <?php endforeach; ?>
                     </select>
-                <?php endif; ?>
-            </div>
-            <div class="col-md-6">
-                <label for="batch_name" class="form-label">Batch Name</label>
-                <input type="text" class="form-control" id="batch_name" name="batch_name" maxlength="100" value="<?= e($form['batch_name']) ?>" required>
-            </div>
-            <div class="col-md-4">
-                <label for="intake_year" class="form-label">Intake Year</label>
-                <input type="number" class="form-control" id="intake_year" name="intake_year" min="<?= e((string) intake_year_min()) ?>" max="<?= e((string) intake_year_max()) ?>" value="<?= e($form['intake_year']) ?>" required>
-            </div>
-            <div class="col-md-4">
-                <label for="start_date" class="form-label">Start Date</label>
-                <input type="date" class="form-control" id="start_date" name="start_date" value="<?= e($form['start_date']) ?>" required>
-            </div>
-            <div class="col-md-4">
-                <label for="end_date" class="form-label">End Date</label>
-                <input type="date" class="form-control" id="end_date" name="end_date" value="<?= e($form['end_date']) ?>">
-                <div class="form-text">Optional. Leave blank if the intake has no planned end date.</div>
-            </div>
-            <div class="col-md-4">
-                <label for="status" class="form-label">Status</label>
-                <select class="form-select" id="status" name="status">
-                    <?php foreach (batch_statuses() as $batchStatus): ?>
-                        <option value="<?= e($batchStatus) ?>" <?= $form['status'] === $batchStatus ? 'selected' : '' ?>><?= e($batchStatus) ?></option>
-                    <?php endforeach; ?>
-                </select>
+                </div>
             </div>
         </div>
-        <div class="mt-4">
+
+        <div class="app-form-actions">
             <button type="submit" class="btn btn-primary"><?= $isEdit ? 'Save Changes' : 'Create Batch' ?></button>
         </div>
     </div>

@@ -46,8 +46,8 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
 
 <div class="card shadow-sm">
     <div class="table-responsive">
-        <table class="table table-striped mb-0 align-middle">
-            <thead>
+        <table class="table table-hover mb-0 align-middle">
+            <thead class="table-light">
                 <tr>
                     <th>Registration No</th>
                     <th>Student</th>
@@ -56,12 +56,18 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
                     <th>Late / On Time</th>
                     <th>Grade</th>
                     <th>File</th>
-                    <th>Action</th>
+                    <th class="text-end">Action</th>
                 </tr>
             </thead>
             <tbody>
                 <?php if ($rows === []): ?>
-                    <tr><td colspan="8" class="text-center text-muted py-4">No enrolled students for this module.</td></tr>
+                    <tr>
+                        <td colspan="8" class="p-0">
+                            <div class="app-empty-state">
+                                <p class="app-empty-state__title mb-0">No enrolled students for this module.</p>
+                            </div>
+                        </td>
+                    </tr>
                 <?php else: ?>
                     <?php foreach ($rows as $row): ?>
                         <tr>
@@ -72,16 +78,18 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
                             <td><?= e((string) $row['timing']) ?></td>
                             <td><?= e((string) $row['grade_display']) ?></td>
                             <td><?= $row['submission_id'] ? 'Attached' : '—' ?></td>
-                            <td class="text-nowrap">
+                            <td class="text-end">
                                 <?php if ($row['submission_id']): ?>
-                                    <a class="btn btn-sm btn-outline-primary" href="<?= e(assignment_download_url($academicRoutePrefix, 'submission', (int) $row['submission_id'])) ?>">Download</a>
-                                    <?php if ($courseworkCanEdit): ?>
-                                        <a class="btn btn-sm btn-primary" href="<?= e(assignment_grade_url($academicRoutePrefix, (int) $row['submission_id'])) ?>">
-                                            <?= ($row['matrix_status'] ?? '') === 'GRADED' ? 'Edit Grade' : 'Grade' ?>
-                                        </a>
-                                    <?php else: ?>
-                                        <a class="btn btn-sm btn-outline-secondary" href="<?= e(assignment_grade_url($academicRoutePrefix, (int) $row['submission_id'])) ?>">View result</a>
-                                    <?php endif; ?>
+                                    <div class="app-actions">
+                                        <a class="btn btn-sm btn-outline-primary" href="<?= e(assignment_download_url($academicRoutePrefix, 'submission', (int) $row['submission_id'])) ?>">Download</a>
+                                        <?php if ($courseworkCanEdit): ?>
+                                            <a class="btn btn-sm btn-primary" href="<?= e(assignment_grade_url($academicRoutePrefix, (int) $row['submission_id'])) ?>">
+                                                <?= ($row['matrix_status'] ?? '') === 'GRADED' ? 'Edit Grade' : 'Grade' ?>
+                                            </a>
+                                        <?php else: ?>
+                                            <a class="btn btn-sm btn-outline-secondary" href="<?= e(assignment_grade_url($academicRoutePrefix, (int) $row['submission_id'])) ?>">View result</a>
+                                        <?php endif; ?>
+                                    </div>
                                 <?php else: ?>
                                     —
                                 <?php endif; ?>

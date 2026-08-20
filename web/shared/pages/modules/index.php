@@ -22,12 +22,12 @@ $modules = list_modules(array_filter([
 require INCLUDES_PATH . '/dashboard-layout-start.php';
 ?>
 
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <p class="text-muted mb-0">Create a module once in the catalogue, then assign it to one or more courses.</p>
+<div class="app-list-toolbar">
+    <p class="app-list-toolbar__desc">Create a module once in the catalogue, then assign it to one or more courses.</p>
     <a href="<?= e(app_url($academicRoutePrefix . '/modules/create.php')) ?>" class="btn btn-primary">Add Module</a>
 </div>
 
-<form method="get" class="card shadow-sm mb-4">
+<form method="get" class="card app-filter-card mb-4">
     <div class="card-body">
         <div class="row g-3">
             <div class="col-md-5">
@@ -43,9 +43,11 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
                     <?php endforeach; ?>
                 </select>
             </div>
-            <div class="col-md-4 d-flex align-items-end gap-2">
-                <button type="submit" class="btn btn-outline-primary">Filter</button>
-                <a href="<?= e(app_url($academicRoutePrefix . '/modules/index.php')) ?>" class="btn btn-outline-secondary">Reset</a>
+            <div class="col-md-4 d-flex align-items-end">
+                <div class="app-filter-actions">
+                    <button type="submit" class="btn btn-outline-primary">Filter</button>
+                    <a href="<?= e(app_url($academicRoutePrefix . '/modules/index.php')) ?>" class="btn btn-outline-secondary">Reset</a>
+                </div>
             </div>
         </div>
     </div>
@@ -67,18 +69,26 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
             </thead>
             <tbody>
                 <?php if ($modules === []): ?>
-                    <tr><td colspan="7" class="text-center text-muted py-4">No modules found.</td></tr>
+                    <tr>
+                        <td colspan="7" class="p-0">
+                            <div class="app-empty-state">
+                                <p class="app-empty-state__title mb-0">No modules found.</p>
+                            </div>
+                        </td>
+                    </tr>
                 <?php else: ?>
                     <?php foreach ($modules as $module): ?>
                         <tr>
                             <td><?= e($module['module_code']) ?></td>
-                            <td><?= e($module['module_name']) ?></td>
+                            <td><?= app_truncate_html((string) $module['module_name'], 'md') ?></td>
                             <td><?= e((string) $module['credits']) ?></td>
                             <td><?= e((string) $module['semester']) ?></td>
                             <td><span class="badge <?= e(status_badge_class($module['status'])) ?>"><?= e($module['status']) ?></span></td>
                             <td><?= e((string) $module['course_count']) ?></td>
                             <td class="text-end">
-                                <a href="<?= e(app_url($academicRoutePrefix . '/modules/edit.php?id=' . $module['module_id'])) ?>" class="btn btn-sm btn-outline-primary">Edit</a>
+                                <div class="app-actions">
+                                    <a href="<?= e(app_url($academicRoutePrefix . '/modules/edit.php?id=' . $module['module_id'])) ?>" class="btn btn-sm btn-outline-primary">Edit</a>
+                                </div>
                             </td>
                         </tr>
                     <?php endforeach; ?>

@@ -103,24 +103,26 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
             <p class="text-muted mb-3">No active catalogue modules are available yet. Add modules in the Module Catalogue first.</p>
             <a href="<?= e(app_url($academicRoutePrefix . '/modules/create.php')) ?>" class="btn btn-outline-primary btn-sm">Open Module Catalogue</a>
         <?php else: ?>
-            <?php foreach ($assignmentModules as $module): ?>
-                <div class="form-check mb-2">
-                    <input
-                        class="form-check-input"
-                        type="checkbox"
-                        name="module_ids[]"
-                        id="course-module-<?= e((string) $module['module_id']) ?>"
-                        value="<?= e((string) $module['module_id']) ?>"
-                        <?= !empty($module['is_assigned']) ? 'checked' : '' ?>
-                    >
-                    <label class="form-check-label" for="course-module-<?= e((string) $module['module_id']) ?>">
-                        <?= e($module['module_code'] . ' – ' . $module['module_name']) ?>
-                        <span class="text-muted">(<?= e((string) $module['credits']) ?> credits, semester <?= e((string) $module['semester']) ?>)</span>
-                    </label>
-                </div>
-            <?php endforeach; ?>
+            <div class="app-checkbox-grid">
+                <?php foreach ($assignmentModules as $module): ?>
+                    <div class="form-check">
+                        <input
+                            class="form-check-input"
+                            type="checkbox"
+                            name="module_ids[]"
+                            id="course-module-<?= e((string) $module['module_id']) ?>"
+                            value="<?= e((string) $module['module_id']) ?>"
+                            <?= !empty($module['is_assigned']) ? 'checked' : '' ?>
+                        >
+                        <label class="form-check-label" for="course-module-<?= e((string) $module['module_id']) ?>">
+                            <?= e($module['module_code'] . ' – ' . $module['module_name']) ?>
+                            <span class="text-muted">(<?= e((string) $module['credits']) ?> credits, semester <?= e((string) $module['semester']) ?>)</span>
+                        </label>
+                    </div>
+                <?php endforeach; ?>
+            </div>
         <?php endif; ?>
-        <div class="mt-4 d-flex flex-wrap gap-2">
+        <div class="app-form-actions">
             <button type="submit" class="btn btn-primary">Save Course Modules</button>
             <a href="<?= e(app_url($academicRoutePrefix . '/courses/view.php?id=' . $course['course_id'])) ?>" class="btn btn-outline-primary">Finish Course Setup</a>
         </div>

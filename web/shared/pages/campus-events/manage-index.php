@@ -20,15 +20,15 @@ $rows = list_campus_events_for_management();
 require INCLUDES_PATH . '/dashboard-layout-start.php';
 ?>
 
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <p class="text-muted mb-0">Campus events such as workshops and seminars. These are not lecture timetable sessions and are not used for attendance.</p>
+<div class="app-list-toolbar">
+    <p class="app-list-toolbar__desc">Campus events such as workshops and seminars. These are not lecture timetable sessions and are not used for attendance.</p>
     <a href="<?= e(app_url($academicRoutePrefix . '/events/create.php')) ?>" class="btn btn-primary">Create event</a>
 </div>
 
 <div class="card shadow-sm">
     <div class="table-responsive">
-        <table class="table table-striped mb-0 align-middle">
-            <thead>
+        <table class="table table-hover mb-0 align-middle">
+            <thead class="table-light">
                 <tr>
                     <th>Poster</th>
                     <th>Title</th>
@@ -38,13 +38,17 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
                     <th>Audience</th>
                     <th>Status</th>
                     <th>Created By</th>
-                    <th></th>
+                    <th class="text-end">Actions</th>
                 </tr>
             </thead>
             <tbody>
                 <?php if ($rows === []): ?>
                     <tr>
-                        <td colspan="9" class="text-center text-muted py-4">No events yet.</td>
+                        <td colspan="9" class="p-0">
+                            <div class="app-empty-state">
+                                <p class="app-empty-state__title mb-0">No events yet.</p>
+                            </div>
+                        </td>
                     </tr>
                 <?php else: ?>
                     <?php foreach ($rows as $row): ?>
@@ -57,7 +61,7 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
                                     <span class="text-muted">—</span>
                                 <?php endif; ?>
                             </td>
-                            <td><?= e((string) $row['title']) ?></td>
+                            <td><?= app_truncate_html((string) $row['title'], 'md') ?></td>
                             <td><?= e(format_campus_event_datetime(isset($row['start_datetime']) ? (string) $row['start_datetime'] : null)) ?></td>
                             <td><?= e(format_campus_event_datetime(isset($row['end_datetime']) ? (string) $row['end_datetime'] : null)) ?></td>
                             <td><?= e((string) ($row['location'] ?: '—')) ?></td>
@@ -67,9 +71,11 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
                                 <div class="small text-muted"><?= e((string) $row['status']) ?></div>
                             </td>
                             <td><?= e((string) $row['created_by_username']) ?></td>
-                            <td class="text-nowrap">
-                                <a href="<?= e(app_url($academicRoutePrefix . '/events/view.php?id=' . $row['campus_event_id'])) ?>" class="btn btn-sm btn-outline-secondary">View</a>
-                                <a href="<?= e(app_url($academicRoutePrefix . '/events/edit.php?id=' . $row['campus_event_id'])) ?>" class="btn btn-sm btn-outline-primary">Edit</a>
+                            <td class="text-end">
+                                <div class="app-actions">
+                                    <a href="<?= e(app_url($academicRoutePrefix . '/events/view.php?id=' . $row['campus_event_id'])) ?>" class="btn btn-sm btn-outline-secondary">View</a>
+                                    <a href="<?= e(app_url($academicRoutePrefix . '/events/edit.php?id=' . $row['campus_event_id'])) ?>" class="btn btn-sm btn-outline-primary">Edit</a>
+                                </div>
                             </td>
                         </tr>
                     <?php endforeach; ?>

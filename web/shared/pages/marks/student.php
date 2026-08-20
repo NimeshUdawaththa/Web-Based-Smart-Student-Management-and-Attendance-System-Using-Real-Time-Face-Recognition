@@ -57,8 +57,8 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
 <h2 class="h5 mb-3">Coursework Results</h2>
 <div class="card shadow-sm mb-4">
     <div class="table-responsive">
-        <table class="table table-striped mb-0 align-middle">
-            <thead>
+        <table class="table table-hover mb-0 align-middle">
+            <thead class="table-light">
                 <tr>
                     <th>Module</th>
                     <th>Coursework</th>
@@ -69,12 +69,18 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
             </thead>
             <tbody>
                 <?php if ($courseworkRows === []): ?>
-                    <tr><td colspan="5" class="text-center text-muted py-4">No graded coursework results yet.</td></tr>
+                    <tr>
+                        <td colspan="5" class="p-0">
+                            <div class="app-empty-state">
+                                <p class="app-empty-state__title mb-0">No graded coursework results yet.</p>
+                            </div>
+                        </td>
+                    </tr>
                 <?php else: ?>
                     <?php foreach ($courseworkRows as $row): ?>
                         <tr>
-                            <td><?= e($row['module_code'] . ' – ' . $row['module_name']) ?></td>
-                            <td><?= e((string) $row['title']) ?></td>
+                            <td><?= app_truncate_html($row['module_code'] . ' – ' . $row['module_name'], 'md') ?></td>
+                            <td><?= app_truncate_html((string) $row['title'], 'md') ?></td>
                             <td><?= e((string) $row['grade_display']) ?></td>
                             <td><?= $row['percentage'] === null ? '—' : e(format_marks_percentage((float) $row['percentage'])) ?></td>
                             <td><?= !empty($row['feedback']) ? nl2br(e((string) $row['feedback'])) : '<span class="text-muted">No feedback.</span>' ?></td>
@@ -89,8 +95,8 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
 <h2 class="h5 mb-3">Module Assessment Results</h2>
 <div class="card shadow-sm">
     <div class="table-responsive">
-        <table class="table table-striped mb-0 align-middle">
-            <thead>
+        <table class="table table-hover mb-0 align-middle">
+            <thead class="table-light">
                 <tr>
                     <th>Module</th>
                     <th>Type</th>
@@ -103,13 +109,19 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
             </thead>
             <tbody>
                 <?php if ($marksRows === []): ?>
-                    <tr><td colspan="7" class="text-center text-muted py-4">No assessment results recorded yet.</td></tr>
+                    <tr>
+                        <td colspan="7" class="p-0">
+                            <div class="app-empty-state">
+                                <p class="app-empty-state__title mb-0">No assessment results recorded yet.</p>
+                            </div>
+                        </td>
+                    </tr>
                 <?php else: ?>
                     <?php foreach ($marksRows as $row): ?>
                         <tr>
-                            <td><?= e($row['module_code'] . ' – ' . $row['module_name']) ?></td>
+                            <td><?= app_truncate_html($row['module_code'] . ' – ' . $row['module_name'], 'md') ?></td>
                             <td><?= e((string) $row['assessment_type']) ?></td>
-                            <td><?= e((string) $row['assessment_name']) ?></td>
+                            <td><?= app_truncate_html((string) $row['assessment_name'], 'md') ?></td>
                             <td><?= e(format_marks_pair($row['marks_obtained'], $row['max_marks'])) ?></td>
                             <td><?= e(format_marks_percentage($row['percentage'])) ?></td>
                             <td><?= e((string) ($row['remarks'] ?? '')) ?></td>

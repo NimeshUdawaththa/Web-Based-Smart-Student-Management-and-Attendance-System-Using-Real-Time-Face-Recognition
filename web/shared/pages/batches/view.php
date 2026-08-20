@@ -118,26 +118,29 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
             <?php if ($assignmentModules === []): ?>
                 <p class="text-muted mb-0">No active modules are assigned to this course yet. Manage modules from the Course View first.</p>
             <?php else: ?>
-                <div class="list-group mb-3">
+                <div class="app-checkbox-grid mb-3">
                     <?php foreach ($assignmentModules as $module): ?>
-                        <label class="list-group-item d-flex align-items-center gap-2">
+                        <div class="form-check">
                             <input
-                                class="form-check-input mt-0"
+                                class="form-check-input"
                                 type="checkbox"
+                                id="batch-module-<?= e((string) $module['module_id']) ?>"
                                 name="module_ids[]"
                                 value="<?= e((string) $module['module_id']) ?>"
                                 <?= $module['is_assigned'] ? 'checked' : '' ?>
                                 <?= $module['can_assign'] ? '' : 'disabled' ?>
                             >
-                            <span>
+                            <label class="form-check-label" for="batch-module-<?= e((string) $module['module_id']) ?>">
                                 <?= e($module['module_code'] . ' – ' . $module['module_name']) ?>
                                 <span class="badge <?= e(status_badge_class($module['status'])) ?>"><?= e($module['status']) ?></span>
-                            </span>
-                        </label>
+                            </label>
+                        </div>
                     <?php endforeach; ?>
                 </div>
             <?php endif; ?>
-            <button type="submit" class="btn btn-primary">Save Batch Modules</button>
+            <div class="app-form-actions">
+                <button type="submit" class="btn btn-primary">Save Batch Modules</button>
+            </div>
         </form>
     </div>
 </div>

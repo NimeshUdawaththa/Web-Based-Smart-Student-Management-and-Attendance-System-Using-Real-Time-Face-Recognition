@@ -155,36 +155,40 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
         <?= csrf_field() ?>
         <div class="card shadow-sm mb-4">
             <div class="card-body">
-                <div class="row g-3">
-                    <div class="col-md-4">
-                        <label for="module_id" class="form-label">Module</label>
-                        <select class="form-select" id="module_id" name="module_id" required>
-                            <option value="">Select module</option>
-                            <?php foreach ($taughtModules as $module): ?>
-                                <option value="<?= e((string) $module['module_id']) ?>" <?= $moduleId === (int) $module['module_id'] ? 'selected' : '' ?>>
-                                    <?= e($module['module_code'] . ' – ' . $module['module_name']) ?>
-                                </option>
-                            <?php endforeach; ?>
-                        </select>
+                <p class="app-required-note"><span class="app-required-note__mark" aria-hidden="true">*</span> <span class="visually-hidden">Asterisk means </span>Required</p>
+                <div class="app-form-section">
+                    <h2 class="app-form-section__title">Assessment</h2>
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label for="module_id" class="form-label app-required">Module</label>
+                            <select class="form-select" id="module_id" name="module_id" required>
+                                <option value="">Select module</option>
+                                <?php foreach ($taughtModules as $module): ?>
+                                    <option value="<?= e((string) $module['module_id']) ?>" <?= $moduleId === (int) $module['module_id'] ? 'selected' : '' ?>>
+                                        <?= e($module['module_code'] . ' – ' . $module['module_name']) ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="assessment_type" class="form-label app-required">Assessment Type</label>
+                            <select class="form-select" id="assessment_type" name="assessment_type" required <?= $isExisting ? 'readonly' : '' ?>>
+                                <?php foreach (marks_assessment_types() as $type): ?>
+                                    <option value="<?= e($type) ?>" <?= $assessmentType === $type ? 'selected' : '' ?>><?= e($type) ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="assessment_name" class="form-label app-required">Assessment Name</label>
+                            <input type="text" class="form-control" id="assessment_name" name="assessment_name" maxlength="150" required value="<?= e($assessmentName) ?>">
+                        </div>
+                        <div class="col-md-2">
+                            <label for="max_marks" class="form-label app-required">Maximum Marks</label>
+                            <input type="text" inputmode="decimal" class="form-control" id="max_marks" name="max_marks" required value="<?= e($maxMarksForm) ?>">
+                        </div>
                     </div>
-                    <div class="col-md-3">
-                        <label for="assessment_type" class="form-label">Assessment Type</label>
-                        <select class="form-select" id="assessment_type" name="assessment_type" required <?= $isExisting ? 'readonly' : '' ?>>
-                            <?php foreach (marks_assessment_types() as $type): ?>
-                                <option value="<?= e($type) ?>" <?= $assessmentType === $type ? 'selected' : '' ?>><?= e($type) ?></option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
-                    <div class="col-md-3">
-                        <label for="assessment_name" class="form-label">Assessment Name</label>
-                        <input type="text" class="form-control" id="assessment_name" name="assessment_name" maxlength="150" required value="<?= e($assessmentName) ?>">
-                    </div>
-                    <div class="col-md-2">
-                        <label for="max_marks" class="form-label">Maximum Marks</label>
-                        <input type="text" inputmode="decimal" class="form-control" id="max_marks" name="max_marks" required value="<?= e($maxMarksForm) ?>">
-                    </div>
+                    <p class="form-text mt-2 mb-0">Leave a mark blank to keep it Not Recorded (not zero). Saving the same assessment again updates existing rows.</p>
                 </div>
-                <p class="form-text mt-2 mb-0">Leave a mark blank to keep it Not Recorded (not zero). Saving the same assessment again updates existing rows.</p>
             </div>
         </div>
 <?php else: ?>
@@ -199,6 +203,9 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
 <?php endif; ?>
 
 <div class="card shadow-sm">
+    <div class="card-header bg-white">
+        <h2 class="h6 mb-0">Student Marks</h2>
+    </div>
     <div class="table-responsive">
         <table class="table table-striped mb-0 align-middle">
             <thead>
@@ -249,7 +256,7 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
 </div>
 
 <?php if ($marksCanEdit): ?>
-        <div class="mt-3">
+        <div class="app-form-actions">
             <button type="submit" class="btn btn-primary">Save results</button>
             <a class="btn btn-outline-secondary" href="<?= e(app_url($academicRoutePrefix . '/marks/index.php')) ?>">Cancel</a>
         </div>

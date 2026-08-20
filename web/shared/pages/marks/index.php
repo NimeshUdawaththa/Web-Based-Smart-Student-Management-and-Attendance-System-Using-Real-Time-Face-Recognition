@@ -48,8 +48,8 @@ if ($marksCanEdit) {
 require INCLUDES_PATH . '/dashboard-layout-start.php';
 ?>
 
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <p class="text-muted mb-0">
+<div class="app-list-toolbar">
+    <p class="app-list-toolbar__desc">
         <?php if ($marksCanEdit): ?>
             Module assessment results (quizzes, exams, and similar). Coursework assignment grades stay under Coursework Assignments.
         <?php else: ?>
@@ -61,7 +61,7 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
     <?php endif; ?>
 </div>
 
-<form method="get" class="card shadow-sm mb-4">
+<form method="get" class="card app-filter-card mb-4">
     <div class="card-body">
         <div class="row g-3 align-items-end">
             <?php if ($marksCanEdit): ?>
@@ -114,7 +114,9 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
                 </div>
             <?php endif; ?>
             <div class="col-md-2">
-                <button type="submit" class="btn btn-outline-primary">Filter</button>
+                <div class="app-filter-actions">
+                    <button type="submit" class="btn btn-outline-primary">Filter</button>
+                </div>
             </div>
         </div>
     </div>
@@ -122,8 +124,8 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
 
 <div class="card shadow-sm">
     <div class="table-responsive">
-        <table class="table table-striped mb-0 align-middle">
-            <thead>
+        <table class="table table-hover mb-0 align-middle">
+            <thead class="table-light">
                 <tr>
                     <th>Module</th>
                     <th>Type</th>
@@ -133,18 +135,22 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
                         <th>Lecturer</th>
                     <?php endif; ?>
                     <th>Recorded</th>
-                    <th></th>
+                    <th class="text-end">Actions</th>
                 </tr>
             </thead>
             <tbody>
                 <?php if ($assessments === []): ?>
                     <tr>
-                        <td colspan="<?= $marksCanEdit ? '6' : '7' ?>" class="text-center text-muted py-4">No assessment results found.</td>
+                        <td colspan="<?= $marksCanEdit ? '6' : '7' ?>" class="p-0">
+                            <div class="app-empty-state">
+                                <p class="app-empty-state__title mb-0">No assessment results found.</p>
+                            </div>
+                        </td>
                     </tr>
                 <?php else: ?>
                     <?php foreach ($assessments as $row): ?>
                         <tr>
-                            <td><?= e($row['module_code'] . ' – ' . $row['module_name']) ?></td>
+                            <td><?= app_truncate_html((string) ($row['module_code'] . ' – ' . $row['module_name']), 'md') ?></td>
                             <td><?= e((string) $row['assessment_type']) ?></td>
                             <td><?= e((string) $row['assessment_name']) ?></td>
                             <td><?= e((string) $row['max_marks']) ?></td>
@@ -152,7 +158,7 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
                                 <td><?= e($row['lecturer_first_name'] . ' ' . $row['lecturer_last_name']) ?></td>
                             <?php endif; ?>
                             <td><?= e((string) $row['recorded_count']) ?></td>
-                            <td>
+                            <td class="text-end">
                                 <?php
                                 $query = marks_entry_query(
                                     (int) $row['module_id'],
@@ -161,9 +167,11 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
                                     $marksCanEdit ? null : (int) $row['recorded_by']
                                 );
                                 ?>
-                                <a class="btn btn-sm btn-outline-primary" href="<?= e(app_url($academicRoutePrefix . '/marks/entry.php?' . $query)) ?>">
-                                    <?= $marksCanEdit ? 'Edit' : 'View' ?>
-                                </a>
+                                <div class="app-actions">
+                                    <a class="btn btn-sm btn-outline-primary" href="<?= e(app_url($academicRoutePrefix . '/marks/entry.php?' . $query)) ?>">
+                                        <?= $marksCanEdit ? 'Edit' : 'View' ?>
+                                    </a>
+                                </div>
                             </td>
                         </tr>
                     <?php endforeach; ?>

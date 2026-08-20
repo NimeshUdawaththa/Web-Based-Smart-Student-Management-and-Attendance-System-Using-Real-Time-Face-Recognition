@@ -46,8 +46,8 @@ $activeSessions = get_in_progress_sessions($restrictLecturerId);
 require INCLUDES_PATH . '/dashboard-layout-start.php';
 ?>
 
-<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
-    <p class="text-muted mb-0">Statuses update when this page is opened. Start, Stop, and Cancel remain available as manual overrides.</p>
+<div class="app-list-toolbar">
+    <p class="app-list-toolbar__desc">Statuses update when this page is opened. Start, Stop, and Cancel remain available as manual overrides.</p>
     <?php if ($canManage): ?>
         <div class="d-flex gap-2">
             <a href="<?= e(app_url($academicRoutePrefix . '/calendar/index.php')) ?>" class="btn btn-outline-primary">Lecture Calendar</a>
@@ -73,7 +73,7 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
     <a href="<?= e(app_url($academicRoutePrefix . '/sessions/index.php?view=all')) ?>" class="btn btn-sm <?= $view === 'all' ? 'btn-primary' : 'btn-outline-primary' ?>">All</a>
 </div>
 
-<form method="get" class="card shadow-sm mb-4">
+<form method="get" class="card app-filter-card mb-4">
     <div class="card-body row g-3">
         <input type="hidden" name="view" value="all">
         <div class="col-md-3">
@@ -94,7 +94,9 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
             </select>
         </div>
         <div class="col-md-3 d-flex align-items-end">
-            <button type="submit" class="btn btn-outline-primary">Filter</button>
+            <div class="app-filter-actions">
+                <button type="submit" class="btn btn-outline-primary">Filter</button>
+            </div>
         </div>
     </div>
 </form>
@@ -117,7 +119,13 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
             </thead>
             <tbody>
                 <?php if ($sessions === []): ?>
-                    <tr><td colspan="9" class="text-center text-muted py-4">No lecture sessions found.</td></tr>
+                    <tr>
+                        <td colspan="9" class="p-0">
+                            <div class="app-empty-state">
+                                <p class="app-empty-state__title mb-0">No lecture sessions found.</p>
+                            </div>
+                        </td>
+                    </tr>
                 <?php else: ?>
                     <?php foreach ($sessions as $session): ?>
                         <tr>
@@ -138,7 +146,9 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
                                 <?php endif; ?>
                             </td>
                             <td class="text-end">
-                                <a href="<?= e(app_url($academicRoutePrefix . '/sessions/view.php?id=' . $session['session_id'])) ?>" class="btn btn-sm btn-outline-primary">Open</a>
+                                <div class="app-actions">
+                                    <a href="<?= e(app_url($academicRoutePrefix . '/sessions/view.php?id=' . $session['session_id'])) ?>" class="btn btn-sm btn-outline-primary">Open</a>
+                                </div>
                             </td>
                         </tr>
                     <?php endforeach; ?>

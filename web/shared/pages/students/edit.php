@@ -184,7 +184,7 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
 <?php endif; ?>
 
 <?php if ($isStudentActive || $isStudentInactive): ?>
-    <div class="card shadow-sm mb-4 border-<?= $isStudentActive ? 'warning' : 'success' ?>">
+    <div class="card shadow-sm mb-4 app-lifecycle-card border-<?= $isStudentActive ? 'warning' : 'success' ?>">
         <div class="card-body d-flex flex-wrap justify-content-between align-items-center gap-3">
             <div>
                 <h2 class="h6 mb-1"><?= $isStudentActive ? 'Deactivate Student' : 'Reactivate Student' ?></h2>
@@ -234,92 +234,112 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
             Prefer <strong>Deactivate / Reactivate</strong> above for account lifecycle; status fields here remain available for other cases (e.g. GRADUATED).
         </div>
 
-        <div class="row g-3 mb-4">
-            <div class="col-md-4">
-                <label class="form-label">Username</label>
-                <input type="text" class="form-control" value="<?= e($dbStudent['username']) ?>" disabled>
-            </div>
-            <div class="col-md-4">
-                <label for="email" class="form-label">Email</label>
-                <input type="email" class="form-control" id="email" name="email" value="<?= e($form['email']) ?>" required>
-            </div>
-            <div class="col-md-4">
-                <label for="account_status" class="form-label">Account Status</label>
-                <select class="form-select" id="account_status" name="account_status">
-                    <?php foreach (user_statuses() as $accountStatus): ?>
-                        <option value="<?= e($accountStatus) ?>" <?= $form['account_status'] === $accountStatus ? 'selected' : '' ?>><?= e($accountStatus) ?></option>
-                    <?php endforeach; ?>
-                </select>
+        <p class="app-required-note"><span class="app-required-note__mark" aria-hidden="true">*</span> <span class="visually-hidden">Asterisk means </span>Required</p>
+
+        <div class="app-form-section">
+            <h2 class="app-form-section__title">Account</h2>
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <label class="form-label">Username</label>
+                    <input type="text" class="form-control" value="<?= e($dbStudent['username']) ?>" disabled>
+                </div>
+                <div class="col-md-4">
+                    <label for="email" class="form-label app-required">Email</label>
+                    <input type="email" class="form-control" id="email" name="email" value="<?= e($form['email']) ?>" required>
+                </div>
             </div>
         </div>
 
-        <div class="row g-3">
-            <div class="col-md-4">
-                <label for="registration_no" class="form-label">Registration Number</label>
-                <input type="text" class="form-control" id="registration_no" name="registration_no" value="<?= e($form['registration_no']) ?>" required>
-            </div>
-            <div class="col-md-4">
-                <label for="first_name" class="form-label">First Name</label>
-                <input type="text" class="form-control" id="first_name" name="first_name" value="<?= e($form['first_name']) ?>" required>
-            </div>
-            <div class="col-md-4">
-                <label for="last_name" class="form-label">Last Name</label>
-                <input type="text" class="form-control" id="last_name" name="last_name" value="<?= e($form['last_name']) ?>" required>
-            </div>
-            <div class="col-md-4">
-                <label for="phone" class="form-label">Phone</label>
-                <input type="text" class="form-control" id="phone" name="phone" value="<?= e($form['phone']) ?>">
-            </div>
-            <div class="col-md-4">
-                <label for="date_of_birth" class="form-label">Date of Birth</label>
-                <input type="date" class="form-control" id="date_of_birth" name="date_of_birth" value="<?= e($form['date_of_birth']) ?>">
-            </div>
-            <div class="col-md-4">
-                <label for="gender" class="form-label">Gender</label>
-                <select class="form-select" id="gender" name="gender">
-                    <option value="">Select gender</option>
-                    <?php foreach (gender_options() as $gender): ?>
-                        <option value="<?= e($gender) ?>" <?= $form['gender'] === $gender ? 'selected' : '' ?>><?= e($gender) ?></option>
-                    <?php endforeach; ?>
-                </select>
-            </div>
-            <div class="col-md-4">
-                <label for="course_id" class="form-label">Course</label>
-                <select class="form-select course-select" id="course_id" name="course_id" data-batch-target="batch_id" required>
-                    <option value="">Select course</option>
-                    <?php foreach ($courses as $course): ?>
-                        <option value="<?= e((string) $course['course_id']) ?>" <?= (string) $selectedCourseId === (string) $course['course_id'] ? 'selected' : '' ?>>
-                            <?= e(course_choice_label($course)) ?>
-                        </option>
-                    <?php endforeach; ?>
-                </select>
-            </div>
-            <div class="col-md-4">
-                <label for="batch_id" class="form-label">Batch</label>
-                <select class="form-select batch-select" id="batch_id" name="batch_id" required>
-                    <option value="">Select batch</option>
-                    <?php foreach ($batches as $batch): ?>
-                        <option value="<?= e((string) $batch['batch_id']) ?>" <?= $form['batch_id'] === (string) $batch['batch_id'] ? 'selected' : '' ?>>
-                            <?= e($batch['label'] ?? batch_choice_label($batch)) ?>
-                        </option>
-                    <?php endforeach; ?>
-                </select>
-            </div>
-            <div class="col-md-4">
-                <label for="enrollment_date" class="form-label">Enrollment Date</label>
-                <input type="date" class="form-control" id="enrollment_date" name="enrollment_date" value="<?= e($form['enrollment_date']) ?>" required>
-            </div>
-            <div class="col-md-4">
-                <label for="status" class="form-label">Student Status</label>
-                <select class="form-select" id="status" name="status">
-                    <?php foreach (student_statuses() as $studentStatus): ?>
-                        <option value="<?= e($studentStatus) ?>" <?= $form['status'] === $studentStatus ? 'selected' : '' ?>><?= e($studentStatus) ?></option>
-                    <?php endforeach; ?>
-                </select>
+        <div class="app-form-section">
+            <h2 class="app-form-section__title">Personal Details</h2>
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <label for="registration_no" class="form-label app-required">Registration Number</label>
+                    <input type="text" class="form-control" id="registration_no" name="registration_no" value="<?= e($form['registration_no']) ?>" required>
+                </div>
+                <div class="col-md-4">
+                    <label for="first_name" class="form-label app-required">First Name</label>
+                    <input type="text" class="form-control" id="first_name" name="first_name" value="<?= e($form['first_name']) ?>" required>
+                </div>
+                <div class="col-md-4">
+                    <label for="last_name" class="form-label app-required">Last Name</label>
+                    <input type="text" class="form-control" id="last_name" name="last_name" value="<?= e($form['last_name']) ?>" required>
+                </div>
+                <div class="col-md-4">
+                    <label for="phone" class="form-label">Phone</label>
+                    <input type="text" class="form-control" id="phone" name="phone" value="<?= e($form['phone']) ?>">
+                </div>
+                <div class="col-md-4">
+                    <label for="date_of_birth" class="form-label">Date of Birth</label>
+                    <input type="date" class="form-control" id="date_of_birth" name="date_of_birth" value="<?= e($form['date_of_birth']) ?>">
+                </div>
+                <div class="col-md-4">
+                    <label for="gender" class="form-label">Gender</label>
+                    <select class="form-select" id="gender" name="gender">
+                        <option value="">Select gender</option>
+                        <?php foreach (gender_options() as $gender): ?>
+                            <option value="<?= e($gender) ?>" <?= $form['gender'] === $gender ? 'selected' : '' ?>><?= e($gender) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
             </div>
         </div>
 
-        <div class="mt-4 d-flex gap-2 flex-wrap">
+        <div class="app-form-section">
+            <h2 class="app-form-section__title">Academic Placement</h2>
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <label for="course_id" class="form-label app-required">Course</label>
+                    <select class="form-select course-select" id="course_id" name="course_id" data-batch-target="batch_id" required>
+                        <option value="">Select course</option>
+                        <?php foreach ($courses as $course): ?>
+                            <option value="<?= e((string) $course['course_id']) ?>" <?= (string) $selectedCourseId === (string) $course['course_id'] ? 'selected' : '' ?>>
+                                <?= e(course_choice_label($course)) ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label for="batch_id" class="form-label app-required">Batch</label>
+                    <select class="form-select batch-select" id="batch_id" name="batch_id" required>
+                        <option value="">Select batch</option>
+                        <?php foreach ($batches as $batch): ?>
+                            <option value="<?= e((string) $batch['batch_id']) ?>" <?= $form['batch_id'] === (string) $batch['batch_id'] ? 'selected' : '' ?>>
+                                <?= e($batch['label'] ?? batch_choice_label($batch)) ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label for="enrollment_date" class="form-label app-required">Enrollment Date</label>
+                    <input type="date" class="form-control" id="enrollment_date" name="enrollment_date" value="<?= e($form['enrollment_date']) ?>" required>
+                </div>
+            </div>
+        </div>
+
+        <div class="app-form-section">
+            <h2 class="app-form-section__title">Status</h2>
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <label for="status" class="form-label">Student Status</label>
+                    <select class="form-select" id="status" name="status">
+                        <?php foreach (student_statuses() as $studentStatus): ?>
+                            <option value="<?= e($studentStatus) ?>" <?= $form['status'] === $studentStatus ? 'selected' : '' ?>><?= e($studentStatus) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label for="account_status" class="form-label">Account Status</label>
+                    <select class="form-select" id="account_status" name="account_status">
+                        <?php foreach (user_statuses() as $accountStatus): ?>
+                            <option value="<?= e($accountStatus) ?>" <?= $form['account_status'] === $accountStatus ? 'selected' : '' ?>><?= e($accountStatus) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <div class="app-form-actions">
             <button type="submit" class="btn btn-primary">Save Changes</button>
             <a href="<?= e(app_url(str_replace('/students', '/enrollments', $studentRoutePrefix) . '/student.php?id=' . $studentId)) ?>" class="btn btn-outline-secondary">Module Enrollment</a>
             <a href="<?= e(app_url($studentRoutePrefix . '/face-enroll.php?id=' . $studentId)) ?>" class="btn btn-outline-secondary">Enroll Face</a>

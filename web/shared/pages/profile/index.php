@@ -112,18 +112,25 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
             <form method="post" enctype="multipart/form-data" class="mb-3">
                 <?= csrf_field() ?>
                 <input type="hidden" name="action" value="upload_profile_photo">
-                <div class="mb-2">
-                    <label for="profile_photo" class="form-label">Upload / replace photo</label>
-                    <input type="file" class="form-control" id="profile_photo" name="profile_photo" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" required>
-                    <div class="form-text">JPG, PNG, or WebP. Maximum 2 MB.</div>
+                <div class="app-form-section">
+                    <h2 class="app-form-section__title">Upload</h2>
+                    <div class="mb-0">
+                        <label for="profile_photo" class="form-label app-required">Upload / replace photo</label>
+                        <input type="file" class="form-control" id="profile_photo" name="profile_photo" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" required>
+                        <div class="form-text">JPG, PNG, or WebP. Maximum 2 MB.</div>
+                    </div>
                 </div>
-                <button type="submit" class="btn btn-primary btn-sm">Upload photo</button>
+                <div class="app-form-actions">
+                    <button type="submit" class="btn btn-primary btn-sm">Upload photo</button>
+                </div>
             </form>
             <?php if ($hasProfilePhoto): ?>
                 <form method="post" onsubmit="return confirm('Remove your profile photo?');">
                     <?= csrf_field() ?>
                     <input type="hidden" name="action" value="remove_profile_photo">
-                    <button type="submit" class="btn btn-outline-danger btn-sm">Remove photo</button>
+                    <div class="app-form-actions">
+                        <button type="submit" class="btn btn-outline-danger btn-sm">Remove photo</button>
+                    </div>
                 </form>
             <?php endif; ?>
         </div>
@@ -199,27 +206,33 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
                 <form method="post" autocomplete="off">
                     <?= csrf_field() ?>
                     <input type="hidden" name="action" value="update_profile">
-                    <?php if ($canEditNames): ?>
-                        <div class="row g-3 mb-3">
-                            <div class="col-md-6">
-                                <label for="first_name" class="form-label">First name</label>
-                                <input type="text" class="form-control" id="first_name" name="first_name" required value="<?= e($form['first_name']) ?>">
+                    <p class="app-required-note"><span class="app-required-note__mark" aria-hidden="true">*</span> <span class="visually-hidden">Asterisk means </span>Required</p>
+                    <div class="app-form-section">
+                        <h2 class="app-form-section__title">Editable fields</h2>
+                        <?php if ($canEditNames): ?>
+                            <div class="row g-3 mb-3">
+                                <div class="col-md-6">
+                                    <label for="first_name" class="form-label app-required">First name</label>
+                                    <input type="text" class="form-control" id="first_name" name="first_name" required value="<?= e($form['first_name']) ?>">
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="last_name" class="form-label app-required">Last name</label>
+                                    <input type="text" class="form-control" id="last_name" name="last_name" required value="<?= e($form['last_name']) ?>">
+                                </div>
                             </div>
-                            <div class="col-md-6">
-                                <label for="last_name" class="form-label">Last name</label>
-                                <input type="text" class="form-control" id="last_name" name="last_name" required value="<?= e($form['last_name']) ?>">
+                            <div class="mb-3">
+                                <label for="phone" class="form-label">Phone</label>
+                                <input type="text" class="form-control" id="phone" name="phone" value="<?= e($form['phone']) ?>">
                             </div>
+                        <?php endif; ?>
+                        <div class="mb-0">
+                            <label for="email" class="form-label app-required">Email</label>
+                            <input type="email" class="form-control" id="email" name="email" required value="<?= e($form['email']) ?>">
                         </div>
-                        <div class="mb-3">
-                            <label for="phone" class="form-label">Phone</label>
-                            <input type="text" class="form-control" id="phone" name="phone" value="<?= e($form['phone']) ?>">
-                        </div>
-                    <?php endif; ?>
-                    <div class="mb-3">
-                        <label for="email" class="form-label">Email</label>
-                        <input type="email" class="form-control" id="email" name="email" required value="<?= e($form['email']) ?>">
                     </div>
-                    <button type="submit" class="btn btn-primary">Save profile</button>
+                    <div class="app-form-actions">
+                        <button type="submit" class="btn btn-primary">Save profile</button>
+                    </div>
                 </form>
             </div>
         </div>
@@ -234,20 +247,26 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
                 <form method="post" autocomplete="off">
                     <?= csrf_field() ?>
                     <input type="hidden" name="action" value="change_password">
-                    <div class="mb-3">
-                        <label for="current_password" class="form-label">Current password</label>
-                        <input type="password" class="form-control" id="current_password" name="current_password" required>
+                    <p class="app-required-note"><span class="app-required-note__mark" aria-hidden="true">*</span> <span class="visually-hidden">Asterisk means </span>Required</p>
+                    <div class="app-form-section">
+                        <h2 class="app-form-section__title">Password</h2>
+                        <div class="mb-3">
+                            <label for="current_password" class="form-label app-required">Current password</label>
+                            <input type="password" class="form-control" id="current_password" name="current_password" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="new_password" class="form-label app-required">New password</label>
+                            <input type="password" class="form-control" id="new_password" name="new_password" required minlength="<?= PROFILE_PASSWORD_MIN_LENGTH ?>">
+                            <div class="form-text">At least <?= PROFILE_PASSWORD_MIN_LENGTH ?> characters.</div>
+                        </div>
+                        <div class="mb-0">
+                            <label for="confirm_password" class="form-label app-required">Confirm new password</label>
+                            <input type="password" class="form-control" id="confirm_password" name="confirm_password" required minlength="<?= PROFILE_PASSWORD_MIN_LENGTH ?>">
+                        </div>
                     </div>
-                    <div class="mb-3">
-                        <label for="new_password" class="form-label">New password</label>
-                        <input type="password" class="form-control" id="new_password" name="new_password" required minlength="<?= PROFILE_PASSWORD_MIN_LENGTH ?>">
-                        <div class="form-text">At least <?= PROFILE_PASSWORD_MIN_LENGTH ?> characters.</div>
+                    <div class="app-form-actions">
+                        <button type="submit" class="btn btn-outline-primary">Change password</button>
                     </div>
-                    <div class="mb-3">
-                        <label for="confirm_password" class="form-label">Confirm new password</label>
-                        <input type="password" class="form-control" id="confirm_password" name="confirm_password" required minlength="<?= PROFILE_PASSWORD_MIN_LENGTH ?>">
-                    </div>
-                    <button type="submit" class="btn btn-outline-primary">Change password</button>
                 </form>
             </div>
         </div>

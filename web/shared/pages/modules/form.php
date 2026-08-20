@@ -108,33 +108,39 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
         <?php if ($isEdit): ?>
             <input type="hidden" name="module_id" value="<?= e((string) $moduleId) ?>">
         <?php endif; ?>
-        <div class="row g-3">
-            <div class="col-md-4">
-                <label for="module_code" class="form-label">Module Code</label>
-                <input type="text" class="form-control" id="module_code" name="module_code" maxlength="20" value="<?= e($form['module_code']) ?>" required>
-            </div>
-            <div class="col-md-8">
-                <label for="module_name" class="form-label">Module Name</label>
-                <input type="text" class="form-control" id="module_name" name="module_name" maxlength="150" value="<?= e($form['module_name']) ?>" required>
-            </div>
-            <div class="col-md-4">
-                <label for="credits" class="form-label">Credits</label>
-                <input type="number" step="0.1" min="0.1" class="form-control" id="credits" name="credits" value="<?= e($form['credits']) ?>" required>
-            </div>
-            <div class="col-md-4">
-                <label for="semester" class="form-label">Semester</label>
-                <input type="number" min="1" class="form-control" id="semester" name="semester" value="<?= e($form['semester']) ?>" required>
-            </div>
-            <div class="col-md-4">
-                <label for="status" class="form-label">Status</label>
-                <select class="form-select" id="status" name="status">
-                    <?php foreach (module_statuses() as $moduleStatus): ?>
-                        <option value="<?= e($moduleStatus) ?>" <?= $form['status'] === $moduleStatus ? 'selected' : '' ?>><?= e($moduleStatus) ?></option>
-                    <?php endforeach; ?>
-                </select>
+        <p class="app-required-note"><span class="app-required-note__mark" aria-hidden="true">*</span> <span class="visually-hidden">Asterisk means </span>Required</p>
+
+        <div class="app-form-section">
+            <h2 class="app-form-section__title">Module Details</h2>
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <label for="module_code" class="form-label app-required">Module Code</label>
+                    <input type="text" class="form-control" id="module_code" name="module_code" maxlength="20" value="<?= e($form['module_code']) ?>" required>
+                </div>
+                <div class="col-md-8">
+                    <label for="module_name" class="form-label app-required">Module Name</label>
+                    <input type="text" class="form-control" id="module_name" name="module_name" maxlength="150" value="<?= e($form['module_name']) ?>" required>
+                </div>
+                <div class="col-md-4">
+                    <label for="credits" class="form-label app-required">Credits</label>
+                    <input type="number" step="0.1" min="0.1" class="form-control" id="credits" name="credits" value="<?= e($form['credits']) ?>" required>
+                </div>
+                <div class="col-md-4">
+                    <label for="semester" class="form-label app-required">Semester</label>
+                    <input type="number" min="1" class="form-control" id="semester" name="semester" value="<?= e($form['semester']) ?>" required>
+                </div>
+                <div class="col-md-4">
+                    <label for="status" class="form-label">Status</label>
+                    <select class="form-select" id="status" name="status">
+                        <?php foreach (module_statuses() as $moduleStatus): ?>
+                            <option value="<?= e($moduleStatus) ?>" <?= $form['status'] === $moduleStatus ? 'selected' : '' ?>><?= e($moduleStatus) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
             </div>
         </div>
-        <div class="mt-4">
+
+        <div class="app-form-actions">
             <button type="submit" class="btn btn-primary"><?= $isEdit ? 'Save Changes' : 'Create Module' ?></button>
         </div>
     </div>

@@ -1877,3 +1877,18 @@ function status_badge_class(string $status): string
         default => 'text-bg-light',
     };
 }
+
+/**
+ * Safe truncated text for dense tables. Full value always available via title + screen-reader text.
+ */
+function app_truncate_html(string $text, string $size = 'md'): string
+{
+    $sizeClass = match ($size) {
+        'sm' => 'app-text-truncate--sm',
+        'lg' => 'app-text-truncate--lg',
+        default => 'app-text-truncate--md',
+    };
+
+    return '<span class="app-text-truncate ' . $sizeClass . ' d-inline-block align-middle" title="'
+        . e($text) . '">' . e($text) . '</span>';
+}

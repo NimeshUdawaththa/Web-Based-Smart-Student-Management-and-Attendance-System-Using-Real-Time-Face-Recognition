@@ -149,58 +149,74 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
             <?php if ($isEdit): ?>
                 <input type="hidden" name="assignment_id" value="<?= e((string) $assignmentId) ?>">
             <?php endif; ?>
-            <div class="mb-3">
-                <label for="module_id" class="form-label">Module</label>
-                <select class="form-select" id="module_id" name="module_id" required>
-                    <option value="">Select module</option>
-                    <?php foreach ($taughtModules as $module): ?>
-                        <option value="<?= e((string) $module['module_id']) ?>" <?= $form['module_id'] === (string) $module['module_id'] ? 'selected' : '' ?>>
-                            <?= e($module['module_code'] . ' – ' . $module['module_name']) ?>
-                        </option>
-                    <?php endforeach; ?>
-                </select>
-            </div>
-            <div class="mb-3">
-                <label for="title" class="form-label">Title</label>
-                <input type="text" class="form-control" id="title" name="title" maxlength="200" required value="<?= e($form['title']) ?>">
-            </div>
-            <div class="mb-3">
-                <label for="description" class="form-label">Description / instructions</label>
-                <textarea class="form-control" id="description" name="description" rows="6"><?= e($form['description']) ?></textarea>
-            </div>
-            <div class="row">
-                <div class="col-md-6 mb-3">
-                    <label for="due_date" class="form-label">Due date and time</label>
-                    <input type="datetime-local" class="form-control" id="due_date" name="due_date" required value="<?= e($form['due_date']) ?>">
-                    <div class="form-text">Times use <?= e(APP_TIMEZONE) ?>.</div>
-                </div>
-                <div class="col-md-3 mb-3">
-                    <label for="max_marks" class="form-label">Max marks</label>
-                    <input type="number" class="form-control" id="max_marks" name="max_marks" min="0.01" step="0.01" required value="<?= e($form['max_marks']) ?>">
-                </div>
-                <div class="col-md-3 mb-3">
-                    <label for="status" class="form-label">Status</label>
-                    <select class="form-select" id="status" name="status">
-                        <?php foreach (assignment_statuses() as $status): ?>
-                            <option value="<?= e($status) ?>" <?= $form['status'] === $status ? 'selected' : '' ?>><?= e($status) ?></option>
+            <p class="app-required-note"><span class="app-required-note__mark" aria-hidden="true">*</span> <span class="visually-hidden">Asterisk means </span>Required</p>
+
+            <div class="app-form-section">
+                <h2 class="app-form-section__title">Assignment Details</h2>
+                <div class="mb-3">
+                    <label for="module_id" class="form-label app-required">Module</label>
+                    <select class="form-select" id="module_id" name="module_id" required>
+                        <option value="">Select module</option>
+                        <?php foreach ($taughtModules as $module): ?>
+                            <option value="<?= e((string) $module['module_id']) ?>" <?= $form['module_id'] === (string) $module['module_id'] ? 'selected' : '' ?>>
+                                <?= e($module['module_code'] . ' – ' . $module['module_name']) ?>
+                            </option>
                         <?php endforeach; ?>
                     </select>
-                    <div class="form-text">Students never see DRAFT assignments.</div>
+                </div>
+                <div class="mb-3">
+                    <label for="title" class="form-label app-required">Title</label>
+                    <input type="text" class="form-control" id="title" name="title" maxlength="200" required value="<?= e($form['title']) ?>">
+                </div>
+                <div class="mb-0">
+                    <label for="description" class="form-label">Description / instructions</label>
+                    <textarea class="form-control" id="description" name="description" rows="6"><?= e($form['description']) ?></textarea>
                 </div>
             </div>
-            <div class="mb-3">
-                <label for="brief_file" class="form-label">Optional attachment</label>
-                <input type="file" class="form-control" id="brief_file" name="brief_file" accept=".pdf,.doc,.docx,.zip">
-                <div class="form-text">PDF, DOC, DOCX, or ZIP. Maximum <?= e((string) max(1, (int) round(ASSIGNMENT_UPLOAD_MAX_BYTES / 1048576))) ?> MB.</div>
-                <?php if ($isEdit && !empty($assignment['file_path'])): ?>
-                    <div class="form-check mt-2">
-                        <input class="form-check-input" type="checkbox" id="remove_file" name="remove_file" value="1">
-                        <label class="form-check-label" for="remove_file">Remove current attachment</label>
+
+            <div class="app-form-section">
+                <h2 class="app-form-section__title">Schedule &amp; Marks</h2>
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label for="due_date" class="form-label app-required">Due date and time</label>
+                        <input type="datetime-local" class="form-control" id="due_date" name="due_date" required value="<?= e($form['due_date']) ?>">
+                        <div class="form-text">Times use <?= e(APP_TIMEZONE) ?>.</div>
                     </div>
-                <?php endif; ?>
+                    <div class="col-md-3 mb-3">
+                        <label for="max_marks" class="form-label app-required">Max marks</label>
+                        <input type="number" class="form-control" id="max_marks" name="max_marks" min="0.01" step="0.01" required value="<?= e($form['max_marks']) ?>">
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <label for="status" class="form-label">Status</label>
+                        <select class="form-select" id="status" name="status">
+                            <?php foreach (assignment_statuses() as $status): ?>
+                                <option value="<?= e($status) ?>" <?= $form['status'] === $status ? 'selected' : '' ?>><?= e($status) ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                        <div class="form-text">Students never see DRAFT assignments.</div>
+                    </div>
+                </div>
             </div>
-            <button type="submit" class="btn btn-primary"><?= $isEdit ? 'Save changes' : 'Create assignment' ?></button>
-            <a class="btn btn-outline-secondary" href="<?= e(app_url($academicRoutePrefix . '/assignments/index.php')) ?>">Cancel</a>
+
+            <div class="app-form-section">
+                <h2 class="app-form-section__title">Attachment</h2>
+                <div class="mb-0">
+                    <label for="brief_file" class="form-label">Optional attachment</label>
+                    <input type="file" class="form-control" id="brief_file" name="brief_file" accept=".pdf,.doc,.docx,.zip">
+                    <div class="form-text">PDF, DOC, DOCX, or ZIP. Maximum <?= e((string) max(1, (int) round(ASSIGNMENT_UPLOAD_MAX_BYTES / 1048576))) ?> MB.</div>
+                    <?php if ($isEdit && !empty($assignment['file_path'])): ?>
+                        <div class="form-check mt-2">
+                            <input class="form-check-input" type="checkbox" id="remove_file" name="remove_file" value="1">
+                            <label class="form-check-label" for="remove_file">Remove current attachment</label>
+                        </div>
+                    <?php endif; ?>
+                </div>
+            </div>
+
+            <div class="app-form-actions">
+                <button type="submit" class="btn btn-primary"><?= $isEdit ? 'Save changes' : 'Create assignment' ?></button>
+                <a class="btn btn-outline-secondary" href="<?= e(app_url($academicRoutePrefix . '/assignments/index.php')) ?>">Cancel</a>
+            </div>
         </form>
     </div>
 </div>

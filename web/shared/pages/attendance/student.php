@@ -68,9 +68,11 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
                         <?php endforeach; ?>
                     </select>
                 </div>
-                <div class="col-md-3 d-flex align-items-end gap-2">
-                    <button type="submit" class="btn btn-outline-primary">Filter</button>
-                    <a href="<?= e(app_url('student/attendance.php')) ?>" class="btn btn-outline-secondary">Reset</a>
+                <div class="col-md-4 d-flex align-items-end">
+                    <div class="app-filter-actions">
+                        <button type="submit" class="btn btn-outline-primary">Filter</button>
+                        <a href="<?= e(app_url('student/attendance.php')) ?>" class="btn btn-outline-secondary">Reset</a>
+                    </div>
                 </div>
             </form>
         <?php endif; ?>

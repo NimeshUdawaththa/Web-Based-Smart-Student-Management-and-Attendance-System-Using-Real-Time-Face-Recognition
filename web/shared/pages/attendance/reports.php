@@ -93,7 +93,7 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
     <?= $isLecturer ? 'You can only see sessions assigned to you.' : '' ?>
 </p>
 
-<form method="get" class="card shadow-sm mb-4">
+<form method="get" class="card app-filter-card mb-4">
     <div class="card-body">
         <div class="row g-3">
             <div class="col-md-3">
@@ -171,9 +171,11 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
                     <option value="no" <?= (isset($filters['left_early']) && (int) $filters['left_early'] === 0) ? 'selected' : '' ?>>No</option>
                 </select>
             </div>
-            <div class="col-md-2 d-flex align-items-end gap-2">
-                <button type="submit" class="btn btn-outline-primary">Filter</button>
-                <a href="<?= e(app_url($academicRoutePrefix . '/attendance/reports.php')) ?>" class="btn btn-outline-secondary">Reset</a>
+            <div class="col-md-2 d-flex align-items-end">
+                <div class="app-filter-actions">
+                    <button type="submit" class="btn btn-outline-primary">Filter</button>
+                    <a href="<?= e(app_url($academicRoutePrefix . '/attendance/reports.php')) ?>" class="btn btn-outline-secondary">Reset</a>
+                </div>
             </div>
         </div>
     </div>
@@ -275,8 +277,10 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
             <tbody>
                 <?php if ($rows === []): ?>
                     <tr>
-                        <td colspan="13" class="text-center text-muted py-4">
-                            <?= $sessionNotice !== null ? e($sessionNotice) : 'No finalized attendance matches these filters.' ?>
+                        <td colspan="13" class="p-0">
+                            <div class="app-empty-state">
+                                <p class="app-empty-state__title mb-0"><?= $sessionNotice !== null ? e($sessionNotice) : 'No finalized attendance matches these filters.' ?></p>
+                            </div>
                         </td>
                     </tr>
                 <?php else: ?>

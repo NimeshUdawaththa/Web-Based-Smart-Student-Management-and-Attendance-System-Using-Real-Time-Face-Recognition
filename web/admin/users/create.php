@@ -76,37 +76,51 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
 <?php endif; ?>
 
 <form method="post" class="card shadow-sm">
-    <div class="card-body row g-3">
+    <div class="card-body">
         <?= csrf_field() ?>
-        <div class="col-md-6">
-            <label for="username" class="form-label">Username</label>
-            <input type="text" class="form-control" id="username" name="username" value="<?= e($form['username']) ?>" required>
+        <p class="app-required-note"><span class="app-required-note__mark" aria-hidden="true">*</span> <span class="visually-hidden">Asterisk means </span>Required</p>
+
+        <div class="app-form-section">
+            <h2 class="app-form-section__title">Account</h2>
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label for="username" class="form-label app-required">Username</label>
+                    <input type="text" class="form-control" id="username" name="username" value="<?= e($form['username']) ?>" required>
+                </div>
+                <div class="col-md-6">
+                    <label for="email" class="form-label app-required">Email</label>
+                    <input type="email" class="form-control" id="email" name="email" value="<?= e($form['email']) ?>" required>
+                </div>
+                <div class="col-md-6">
+                    <label for="password" class="form-label app-required">Password</label>
+                    <input type="password" class="form-control" id="password" name="password" required>
+                </div>
+            </div>
         </div>
-        <div class="col-md-6">
-            <label for="email" class="form-label">Email</label>
-            <input type="email" class="form-control" id="email" name="email" value="<?= e($form['email']) ?>" required>
+
+        <div class="app-form-section">
+            <h2 class="app-form-section__title">Role / Status</h2>
+            <div class="row g-3">
+                <div class="col-md-3">
+                    <label for="role" class="form-label">Role</label>
+                    <select class="form-select" id="role" name="role">
+                        <?php foreach ($managementRoles as $authRole): ?>
+                            <option value="<?= e($authRole) ?>" <?= $form['role'] === $authRole ? 'selected' : '' ?>><?= e(role_label($authRole)) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label for="status" class="form-label">Status</label>
+                    <select class="form-select" id="status" name="status">
+                        <?php foreach (user_statuses() as $userStatus): ?>
+                            <option value="<?= e($userStatus) ?>" <?= $form['status'] === $userStatus ? 'selected' : '' ?>><?= e($userStatus) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+            </div>
         </div>
-        <div class="col-md-6">
-            <label for="password" class="form-label">Password</label>
-            <input type="password" class="form-control" id="password" name="password" required>
-        </div>
-        <div class="col-md-3">
-            <label for="role" class="form-label">Role</label>
-            <select class="form-select" id="role" name="role">
-                <?php foreach ($managementRoles as $authRole): ?>
-                    <option value="<?= e($authRole) ?>" <?= $form['role'] === $authRole ? 'selected' : '' ?>><?= e(role_label($authRole)) ?></option>
-                <?php endforeach; ?>
-            </select>
-        </div>
-        <div class="col-md-3">
-            <label for="status" class="form-label">Status</label>
-            <select class="form-select" id="status" name="status">
-                <?php foreach (user_statuses() as $userStatus): ?>
-                    <option value="<?= e($userStatus) ?>" <?= $form['status'] === $userStatus ? 'selected' : '' ?>><?= e($userStatus) ?></option>
-                <?php endforeach; ?>
-            </select>
-        </div>
-        <div class="col-12">
+
+        <div class="app-form-actions">
             <button type="submit" class="btn btn-primary">Create User</button>
         </div>
     </div>

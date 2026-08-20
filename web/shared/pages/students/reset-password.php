@@ -102,16 +102,22 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
         <form method="post" autocomplete="off">
             <?= csrf_field() ?>
             <input type="hidden" name="student_id" value="<?= e((string) $studentId) ?>">
-            <div class="mb-3">
-                <label for="new_password" class="form-label">New password</label>
-                <input type="password" class="form-control" id="new_password" name="new_password" required minlength="<?= PROFILE_PASSWORD_MIN_LENGTH ?>">
-                <div class="form-text">At least <?= PROFILE_PASSWORD_MIN_LENGTH ?> characters.</div>
+            <p class="app-required-note"><span class="app-required-note__mark" aria-hidden="true">*</span> <span class="visually-hidden">Asterisk means </span>Required</p>
+            <div class="app-form-section">
+                <h2 class="app-form-section__title">New password</h2>
+                <div class="mb-3">
+                    <label for="new_password" class="form-label app-required">New password</label>
+                    <input type="password" class="form-control" id="new_password" name="new_password" required minlength="<?= PROFILE_PASSWORD_MIN_LENGTH ?>">
+                    <div class="form-text">At least <?= PROFILE_PASSWORD_MIN_LENGTH ?> characters.</div>
+                </div>
+                <div class="mb-0">
+                    <label for="confirm_password" class="form-label app-required">Confirm new password</label>
+                    <input type="password" class="form-control" id="confirm_password" name="confirm_password" required minlength="<?= PROFILE_PASSWORD_MIN_LENGTH ?>">
+                </div>
             </div>
-            <div class="mb-3">
-                <label for="confirm_password" class="form-label">Confirm new password</label>
-                <input type="password" class="form-control" id="confirm_password" name="confirm_password" required minlength="<?= PROFILE_PASSWORD_MIN_LENGTH ?>">
+            <div class="app-form-actions">
+                <button type="submit" class="btn btn-warning">Reset password</button>
             </div>
-            <button type="submit" class="btn btn-warning">Reset password</button>
         </form>
     </div>
 </div>

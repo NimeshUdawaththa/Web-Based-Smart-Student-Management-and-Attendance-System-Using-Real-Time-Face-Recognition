@@ -97,57 +97,65 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
                 <input type="hidden" name="announcement_id" value="<?= (int) $announcementId ?>">
             <?php endif; ?>
 
-            <div class="mb-3">
-                <label for="title" class="form-label">Title</label>
-                <input type="text" class="form-control" id="title" name="title" maxlength="200" required value="<?= e($form['title']) ?>">
-            </div>
+            <p class="app-required-note"><span class="app-required-note__mark" aria-hidden="true">*</span> <span class="visually-hidden">Asterisk means </span>Required</p>
 
-            <div class="mb-3">
-                <label for="message" class="form-label">Message</label>
-                <textarea class="form-control" id="message" name="message" rows="8" required><?= e($form['message']) ?></textarea>
-                <div class="form-text">Plain text only. Line breaks are kept when displayed.</div>
-            </div>
-
-            <div class="mb-3">
-                <div class="form-label">Target Audience</div>
-                <div class="form-check mb-2">
-                    <input class="form-check-input" type="checkbox" id="target_select_all" <?= $allSelected ? 'checked' : '' ?>>
-                    <label class="form-check-label" for="target_select_all">Select All</label>
+            <div class="app-form-section">
+                <h2 class="app-form-section__title">Content</h2>
+                <div class="mb-3">
+                    <label for="title" class="form-label app-required">Title</label>
+                    <input type="text" class="form-control" id="title" name="title" maxlength="200" required value="<?= e($form['title']) ?>">
                 </div>
-                <?php foreach (announcement_selectable_roles() as $role): ?>
-                    <div class="form-check">
-                        <input class="form-check-input announcement-target-role" type="checkbox" name="target_roles[]" id="target_role_<?= e($role) ?>" value="<?= e($role) ?>" <?= in_array($role, $selectedTargets, true) ? 'checked' : '' ?>>
-                        <label class="form-check-label" for="target_role_<?= e($role) ?>"><?= e(announcement_target_label($role)) ?></label>
+                <div class="mb-0">
+                    <label for="message" class="form-label app-required">Message</label>
+                    <textarea class="form-control" id="message" name="message" rows="8" required><?= e($form['message']) ?></textarea>
+                    <div class="form-text">Plain text only. Line breaks are kept when displayed.</div>
+                </div>
+            </div>
+
+            <div class="app-form-section">
+                <h2 class="app-form-section__title">Audience</h2>
+                <div class="app-audience-list">
+                    <div class="form-check mb-2">
+                        <input class="form-check-input" type="checkbox" id="target_select_all" <?= $allSelected ? 'checked' : '' ?>>
+                        <label class="form-check-label" for="target_select_all">Select All</label>
                     </div>
-                <?php endforeach; ?>
+                    <?php foreach (announcement_selectable_roles() as $role): ?>
+                        <div class="form-check">
+                            <input class="form-check-input announcement-target-role" type="checkbox" name="target_roles[]" id="target_role_<?= e($role) ?>" value="<?= e($role) ?>" <?= in_array($role, $selectedTargets, true) ? 'checked' : '' ?>>
+                            <label class="form-check-label" for="target_role_<?= e($role) ?>"><?= e(announcement_target_label($role)) ?></label>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
                 <div class="form-text">Select at least one audience. Select All saves Students, Lecturers, Academic Staff, and Admin.</div>
             </div>
 
-            <div class="row">
-                <div class="col-md-4 mb-3">
-                    <label for="status" class="form-label">Status</label>
-                    <select class="form-select" id="status" name="status" required>
-                        <?php foreach (announcement_statuses() as $status): ?>
-                            <option value="<?= e($status) ?>" <?= $form['status'] === $status ? 'selected' : '' ?>><?= e($status) ?></option>
-                        <?php endforeach; ?>
-                    </select>
+            <div class="app-form-section">
+                <h2 class="app-form-section__title">Schedule / Status</h2>
+                <div class="row">
+                    <div class="col-md-4 mb-3">
+                        <label for="status" class="form-label app-required">Status</label>
+                        <select class="form-select" id="status" name="status" required>
+                            <?php foreach (announcement_statuses() as $status): ?>
+                                <option value="<?= e($status) ?>" <?= $form['status'] === $status ? 'selected' : '' ?>><?= e($status) ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label for="published_at" class="form-label">Publish date/time</label>
+                        <input type="datetime-local" class="form-control" id="published_at" name="published_at" value="<?= e($form['published_at']) ?>">
+                        <div class="form-text">Leave blank when publishing to use the current application time. Future times stay hidden until then.</div>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label for="expires_at" class="form-label">Expiry date/time (optional)</label>
+                        <input type="datetime-local" class="form-control" id="expires_at" name="expires_at" value="<?= e($form['expires_at']) ?>">
+                        <div class="form-text">Leave blank for no expiry. Must be on or after the publish time.</div>
+                    </div>
                 </div>
             </div>
 
-            <div class="row">
-                <div class="col-md-6 mb-3">
-                    <label for="published_at" class="form-label">Publish date/time</label>
-                    <input type="datetime-local" class="form-control" id="published_at" name="published_at" value="<?= e($form['published_at']) ?>">
-                    <div class="form-text">Leave blank when publishing to use the current application time. Future times stay hidden until then.</div>
-                </div>
-                <div class="col-md-6 mb-3">
-                    <label for="expires_at" class="form-label">Expiry date/time (optional)</label>
-                    <input type="datetime-local" class="form-control" id="expires_at" name="expires_at" value="<?= e($form['expires_at']) ?>">
-                    <div class="form-text">Leave blank for no expiry. Must be on or after the publish time.</div>
-                </div>
-            </div>
-
-            <div class="d-flex gap-2">
+            <div class="app-form-actions">
                 <button type="submit" class="btn btn-primary"><?= $isEdit ? 'Save changes' : 'Create announcement' ?></button>
                 <a href="<?= e(app_url($academicRoutePrefix . '/announcements/index.php')) ?>" class="btn btn-outline-secondary">Cancel</a>
             </div>

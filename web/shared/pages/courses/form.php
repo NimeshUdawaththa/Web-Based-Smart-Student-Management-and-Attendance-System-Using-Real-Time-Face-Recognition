@@ -87,29 +87,35 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
         <?php if ($isEdit): ?>
             <input type="hidden" name="course_id" value="<?= e((string) $courseId) ?>">
         <?php endif; ?>
-        <div class="row g-3">
-            <div class="col-md-4">
-                <label for="course_code" class="form-label">Course Code</label>
-                <input type="text" class="form-control" id="course_code" name="course_code" maxlength="20" value="<?= e($form['course_code']) ?>" required>
-            </div>
-            <div class="col-md-8">
-                <label for="course_name" class="form-label">Course Name</label>
-                <input type="text" class="form-control" id="course_name" name="course_name" maxlength="150" value="<?= e($form['course_name']) ?>" required>
-            </div>
-            <div class="col-md-4">
-                <label for="duration_years" class="form-label">Duration (years)</label>
-                <input type="number" class="form-control" id="duration_years" name="duration_years" min="<?= e((string) course_duration_min()) ?>" max="<?= e((string) course_duration_max()) ?>" value="<?= e($form['duration_years']) ?>" required>
-            </div>
-            <div class="col-md-4">
-                <label for="status" class="form-label">Status</label>
-                <select class="form-select" id="status" name="status">
-                    <?php foreach (course_statuses() as $courseStatus): ?>
-                        <option value="<?= e($courseStatus) ?>" <?= $form['status'] === $courseStatus ? 'selected' : '' ?>><?= e($courseStatus) ?></option>
-                    <?php endforeach; ?>
-                </select>
+        <p class="app-required-note"><span class="app-required-note__mark" aria-hidden="true">*</span> <span class="visually-hidden">Asterisk means </span>Required</p>
+
+        <div class="app-form-section">
+            <h2 class="app-form-section__title">Course Details</h2>
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <label for="course_code" class="form-label app-required">Course Code</label>
+                    <input type="text" class="form-control" id="course_code" name="course_code" maxlength="20" value="<?= e($form['course_code']) ?>" required>
+                </div>
+                <div class="col-md-8">
+                    <label for="course_name" class="form-label app-required">Course Name</label>
+                    <input type="text" class="form-control" id="course_name" name="course_name" maxlength="150" value="<?= e($form['course_name']) ?>" required>
+                </div>
+                <div class="col-md-4">
+                    <label for="duration_years" class="form-label app-required">Duration (years)</label>
+                    <input type="number" class="form-control" id="duration_years" name="duration_years" min="<?= e((string) course_duration_min()) ?>" max="<?= e((string) course_duration_max()) ?>" value="<?= e($form['duration_years']) ?>" required>
+                </div>
+                <div class="col-md-4">
+                    <label for="status" class="form-label">Status</label>
+                    <select class="form-select" id="status" name="status">
+                        <?php foreach (course_statuses() as $courseStatus): ?>
+                            <option value="<?= e($courseStatus) ?>" <?= $form['status'] === $courseStatus ? 'selected' : '' ?>><?= e($courseStatus) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
             </div>
         </div>
-        <div class="mt-4">
+
+        <div class="app-form-actions">
             <button type="submit" class="btn btn-primary"><?= $isEdit ? 'Save Changes' : 'Create Course' ?></button>
         </div>
     </div>

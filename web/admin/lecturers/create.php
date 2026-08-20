@@ -67,19 +67,71 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
 <?php endif; ?>
 
 <form method="post" class="card shadow-sm">
-    <div class="card-body row g-3">
+    <div class="card-body">
         <?= csrf_field() ?>
-        <div class="col-md-4"><label class="form-label">Username</label><input class="form-control" name="username" value="<?= e($form['username']) ?>" required></div>
-        <div class="col-md-4"><label class="form-label">Email</label><input type="email" class="form-control" name="email" value="<?= e($form['email']) ?>" required></div>
-        <div class="col-md-4"><label class="form-label">Password</label><input type="password" class="form-control" name="password" required></div>
-        <div class="col-md-4"><label class="form-label">Staff Number</label><input class="form-control" name="staff_no" value="<?= e($form['staff_no']) ?>" required></div>
-        <div class="col-md-4"><label class="form-label">First Name</label><input class="form-control" name="first_name" value="<?= e($form['first_name']) ?>" required></div>
-        <div class="col-md-4"><label class="form-label">Last Name</label><input class="form-control" name="last_name" value="<?= e($form['last_name']) ?>" required></div>
-        <div class="col-md-4"><label class="form-label">Phone</label><input class="form-control" name="phone" value="<?= e($form['phone']) ?>"></div>
-        <div class="col-md-4"><label class="form-label">Department</label><input class="form-control" name="department" value="<?= e($form['department']) ?>"></div>
-        <div class="col-md-2"><label class="form-label">Profile Status</label><select class="form-select" name="status"><?php foreach (staff_statuses() as $s): ?><option value="<?= e($s) ?>" <?= $form['status'] === $s ? 'selected' : '' ?>><?= e($s) ?></option><?php endforeach; ?></select></div>
-        <div class="col-md-2"><label class="form-label">Account Status</label><select class="form-select" name="account_status"><?php foreach (user_statuses() as $s): ?><option value="<?= e($s) ?>" <?= $form['account_status'] === $s ? 'selected' : '' ?>><?= e($s) ?></option><?php endforeach; ?></select></div>
-        <div class="col-12"><button type="submit" class="btn btn-primary">Create Lecturer</button></div>
+        <p class="app-required-note"><span class="app-required-note__mark" aria-hidden="true">*</span> <span class="visually-hidden">Asterisk means </span>Required</p>
+
+        <div class="app-form-section">
+            <h2 class="app-form-section__title">Account</h2>
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <label class="form-label app-required">Username</label>
+                    <input class="form-control" name="username" value="<?= e($form['username']) ?>" required>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label app-required">Email</label>
+                    <input type="email" class="form-control" name="email" value="<?= e($form['email']) ?>" required>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label app-required">Password</label>
+                    <input type="password" class="form-control" name="password" required>
+                </div>
+            </div>
+        </div>
+
+        <div class="app-form-section">
+            <h2 class="app-form-section__title">Personal Details</h2>
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <label class="form-label app-required">Staff Number</label>
+                    <input class="form-control" name="staff_no" value="<?= e($form['staff_no']) ?>" required>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label app-required">First Name</label>
+                    <input class="form-control" name="first_name" value="<?= e($form['first_name']) ?>" required>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label app-required">Last Name</label>
+                    <input class="form-control" name="last_name" value="<?= e($form['last_name']) ?>" required>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Phone</label>
+                    <input class="form-control" name="phone" value="<?= e($form['phone']) ?>">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Department</label>
+                    <input class="form-control" name="department" value="<?= e($form['department']) ?>">
+                </div>
+            </div>
+        </div>
+
+        <div class="app-form-section">
+            <h2 class="app-form-section__title">Status</h2>
+            <div class="row g-3">
+                <div class="col-md-2">
+                    <label class="form-label">Profile Status</label>
+                    <select class="form-select" name="status"><?php foreach (staff_statuses() as $s): ?><option value="<?= e($s) ?>" <?= $form['status'] === $s ? 'selected' : '' ?>><?= e($s) ?></option><?php endforeach; ?></select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Account Status</label>
+                    <select class="form-select" name="account_status"><?php foreach (user_statuses() as $s): ?><option value="<?= e($s) ?>" <?= $form['account_status'] === $s ? 'selected' : '' ?>><?= e($s) ?></option><?php endforeach; ?></select>
+                </div>
+            </div>
+        </div>
+
+        <div class="app-form-actions">
+            <button type="submit" class="btn btn-primary">Create Lecturer</button>
+        </div>
     </div>
 </form>
 

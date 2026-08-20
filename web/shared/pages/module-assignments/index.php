@@ -103,7 +103,7 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
     </div>
 </div>
 
-<form method="get" class="card shadow-sm mb-4">
+<form method="get" class="card app-filter-card mb-4">
     <div class="card-body row g-3">
         <div class="col-md-6">
             <label for="filter_module_id" class="form-label">Filter by module</label>
@@ -134,23 +134,31 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
             </thead>
             <tbody>
                 <?php if ($assignments === []): ?>
-                    <tr><td colspan="6" class="text-center text-muted py-4">No lecturer assignments found.</td></tr>
+                    <tr>
+                        <td colspan="6" class="p-0">
+                            <div class="app-empty-state">
+                                <p class="app-empty-state__title mb-0">No lecturer assignments found.</p>
+                            </div>
+                        </td>
+                    </tr>
                 <?php else: ?>
                     <?php foreach ($assignments as $assignment): ?>
                         <tr>
-                            <td><?= e($assignment['module_code'] . ' – ' . $assignment['module_name']) ?></td>
+                            <td><?= app_truncate_html((string) ($assignment['module_code'] . ' – ' . $assignment['module_name']), 'md') ?></td>
                             <td><?= e($assignment['course_code'] ?: '—') ?></td>
                             <td><?= e($assignment['first_name'] . ' ' . $assignment['last_name']) ?></td>
                             <td><?= e($assignment['staff_no']) ?></td>
                             <td><?= e((string) $assignment['assigned_at']) ?></td>
                             <td class="text-end">
-                                <form method="post" class="d-inline" onsubmit="return confirm('Remove this lecturer assignment?');">
-                                    <?= csrf_field() ?>
-                                    <input type="hidden" name="action" value="unassign">
-                                    <input type="hidden" name="module_lecturer_id" value="<?= e((string) $assignment['module_lecturer_id']) ?>">
-                                    <input type="hidden" name="module_id" value="<?= e((string) ($moduleId ?? '')) ?>">
-                                    <button type="submit" class="btn btn-sm btn-outline-danger">Remove</button>
-                                </form>
+                                <div class="app-actions">
+                                    <form method="post" class="d-inline" onsubmit="return confirm('Remove this lecturer assignment?');">
+                                        <?= csrf_field() ?>
+                                        <input type="hidden" name="action" value="unassign">
+                                        <input type="hidden" name="module_lecturer_id" value="<?= e((string) $assignment['module_lecturer_id']) ?>">
+                                        <input type="hidden" name="module_id" value="<?= e((string) ($moduleId ?? '')) ?>">
+                                        <button type="submit" class="btn btn-sm btn-outline-danger">Remove</button>
+                                    </form>
+                                </div>
                             </td>
                         </tr>
                     <?php endforeach; ?>

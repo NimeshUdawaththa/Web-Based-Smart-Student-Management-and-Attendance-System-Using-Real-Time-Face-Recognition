@@ -49,12 +49,12 @@ $users = list_users(array_filter([
 require INCLUDES_PATH . '/dashboard-layout-start.php';
 ?>
 
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <p class="text-muted mb-0">Manage Admin, Academic Staff, and Lecturer login accounts. Student accounts are managed from Student Management.</p>
+<div class="app-list-toolbar">
+    <p class="app-list-toolbar__desc">Manage Admin, Academic Staff, and Lecturer login accounts. Student accounts are managed from Student Management.</p>
     <a href="<?= e(app_url('admin/users/create.php')) ?>" class="btn btn-primary">Create User</a>
 </div>
 
-<form method="get" class="card shadow-sm mb-4">
+<form method="get" class="card app-filter-card mb-4">
     <div class="card-body">
         <div class="row g-3">
             <div class="col-md-4">
@@ -79,8 +79,10 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
                     <?php endforeach; ?>
                 </select>
             </div>
-            <div class="col-md-2 d-flex align-items-end gap-2">
-                <button type="submit" class="btn btn-outline-primary">Filter</button>
+            <div class="col-md-2 d-flex align-items-end">
+                <div class="app-filter-actions">
+                    <button type="submit" class="btn btn-outline-primary">Filter</button>
+                </div>
             </div>
         </div>
     </div>
@@ -100,31 +102,39 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
             </thead>
             <tbody>
                 <?php if ($users === []): ?>
-                    <tr><td colspan="5" class="text-center text-muted py-4">No users found.</td></tr>
+                    <tr>
+                        <td colspan="5" class="p-0">
+                            <div class="app-empty-state">
+                                <p class="app-empty-state__title mb-0">No users found.</p>
+                            </div>
+                        </td>
+                    </tr>
                 <?php else: ?>
                     <?php foreach ($users as $listedUser): ?>
                         <tr>
                             <td><?= e($listedUser['username']) ?></td>
-                            <td><?= e($listedUser['email']) ?></td>
+                            <td><?= app_truncate_html((string) $listedUser['email'], 'md') ?></td>
                             <td><?= e(role_label($listedUser['role'])) ?></td>
                             <td><span class="badge <?= e(status_badge_class($listedUser['status'])) ?>"><?= e($listedUser['status']) ?></span></td>
                             <td class="text-end">
-                                <a href="<?= e(app_url('admin/users/edit.php?id=' . $listedUser['user_id'])) ?>" class="btn btn-sm btn-outline-primary">Edit</a>
-                                <?php if ($listedUser['status'] === 'ACTIVE'): ?>
-                                    <form method="post" class="d-inline">
-                                        <?= csrf_field() ?>
-                                        <input type="hidden" name="toggle_user_id" value="<?= e((string) $listedUser['user_id']) ?>">
-                                        <input type="hidden" name="toggle_status" value="INACTIVE">
-                                        <button type="submit" class="btn btn-sm btn-outline-warning">Deactivate</button>
-                                    </form>
-                                <?php else: ?>
-                                    <form method="post" class="d-inline">
-                                        <?= csrf_field() ?>
-                                        <input type="hidden" name="toggle_user_id" value="<?= e((string) $listedUser['user_id']) ?>">
-                                        <input type="hidden" name="toggle_status" value="ACTIVE">
-                                        <button type="submit" class="btn btn-sm btn-outline-success">Activate</button>
-                                    </form>
-                                <?php endif; ?>
+                                <div class="app-actions">
+                                    <a href="<?= e(app_url('admin/users/edit.php?id=' . $listedUser['user_id'])) ?>" class="btn btn-sm btn-outline-primary">Edit</a>
+                                    <?php if ($listedUser['status'] === 'ACTIVE'): ?>
+                                        <form method="post" class="d-inline">
+                                            <?= csrf_field() ?>
+                                            <input type="hidden" name="toggle_user_id" value="<?= e((string) $listedUser['user_id']) ?>">
+                                            <input type="hidden" name="toggle_status" value="INACTIVE">
+                                            <button type="submit" class="btn btn-sm btn-outline-warning">Deactivate</button>
+                                        </form>
+                                    <?php else: ?>
+                                        <form method="post" class="d-inline">
+                                            <?= csrf_field() ?>
+                                            <input type="hidden" name="toggle_user_id" value="<?= e((string) $listedUser['user_id']) ?>">
+                                            <input type="hidden" name="toggle_status" value="ACTIVE">
+                                            <button type="submit" class="btn btn-sm btn-outline-success">Activate</button>
+                                        </form>
+                                    <?php endif; ?>
+                                </div>
                             </td>
                         </tr>
                     <?php endforeach; ?>

@@ -44,8 +44,8 @@ if ($isLecturerDirectory) {
 require INCLUDES_PATH . '/dashboard-layout-start.php';
 ?>
 
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <p class="text-muted mb-0">
+<div class="app-list-toolbar">
+    <p class="app-list-toolbar__desc">
         <?= $isLecturerDirectory
             ? 'Students currently enrolled in modules assigned to you.'
             : 'View and manage student records.' ?>
@@ -55,7 +55,7 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
     <?php endif; ?>
 </div>
 
-<form method="get" class="card shadow-sm mb-4">
+<form method="get" class="card app-filter-card mb-4">
     <div class="card-body">
         <div class="row g-3">
             <div class="col-md-<?= $isLecturerDirectory ? '3' : '4' ?>">
@@ -110,9 +110,11 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
                     <?php endif; ?>
                 </select>
             </div>
-            <div class="col-md-<?= $isLecturerDirectory ? '12' : '3' ?> d-flex align-items-end gap-2">
-                <button type="submit" class="btn btn-outline-primary">Filter</button>
-                <a href="<?= e(app_url($studentRoutePrefix . '/index.php')) ?>" class="btn btn-outline-secondary">Reset</a>
+            <div class="col-md-<?= $isLecturerDirectory ? '12' : '3' ?> d-flex align-items-end">
+                <div class="app-filter-actions">
+                    <button type="submit" class="btn btn-outline-primary">Filter</button>
+                    <a href="<?= e(app_url($studentRoutePrefix . '/index.php')) ?>" class="btn btn-outline-secondary">Reset</a>
+                </div>
             </div>
         </div>
     </div>
@@ -149,30 +151,39 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
                 ?>
                 <?php if ($students === []): ?>
                     <tr>
-                        <td colspan="<?= $colspan ?>" class="text-center text-muted py-4">No students found.</td>
+                        <td colspan="<?= $colspan ?>" class="p-0">
+                            <div class="app-empty-state">
+                                <p class="app-empty-state__title mb-0">No students found.</p>
+                            </div>
+                        </td>
                     </tr>
                 <?php else: ?>
                     <?php foreach ($students as $student): ?>
                         <tr>
                             <td><?= e($student['registration_no']) ?></td>
                             <td><?= e($student['first_name'] . ' ' . $student['last_name']) ?></td>
-                            <td><?= e($student['email']) ?></td>
+                            <td><?= app_truncate_html((string) $student['email'], 'md') ?></td>
                             <td><?= e($student['course_code']) ?></td>
                             <td><?= e($student['batch_name']) ?></td>
                             <?php if ($isLecturerDirectory): ?>
-                                <td><?= e((string) ($student['enrolled_modules'] ?? '')) ?></td>
+                                <td><?= app_truncate_html((string) ($student['enrolled_modules'] ?? ''), 'md') ?></td>
                             <?php endif; ?>
                             <td><span class="badge <?= e(status_badge_class($student['status'])) ?>"><?= e($student['status']) ?></span></td>
                             <td><span class="badge <?= e(status_badge_class($student['face_status'])) ?>"><?= e($student['face_status']) ?></span></td>
                             <?php if ($isLecturerDirectory): ?>
                                 <td class="text-end">
-                                    <a href="<?= e(app_url($studentRoutePrefix . '/view.php?id=' . $student['student_id'])) ?>" class="btn btn-sm btn-outline-primary">View</a>
+                                    <div class="app-actions">
+                                        <a href="<?= e(app_url($studentRoutePrefix . '/view.php?id=' . $student['student_id'])) ?>" class="btn btn-sm btn-outline-primary">View</a>
+                                    </div>
                                 </td>
                             <?php elseif (!$readOnly): ?>
                                 <td class="text-end">
-                                    <a href="<?= e(app_url($studentRoutePrefix . '/edit.php?id=' . $student['student_id'])) ?>" class="btn btn-sm btn-outline-primary">Edit</a>
-                                    <a href="<?= e(app_url(str_replace('/students', '/enrollments', $studentRoutePrefix) . '/student.php?id=' . $student['student_id'])) ?>" class="btn btn-sm btn-outline-secondary">Modules</a>
-                                    <a href="<?= e(app_url($studentRoutePrefix . '/face-enroll.php?id=' . $student['student_id'])) ?>" class="btn btn-sm btn-outline-secondary">Enroll Face</a>
+                                    <div class="app-actions">
+                                        <a href="<?= e(app_url($studentRoutePrefix . '/edit.php?id=' . $student['student_id'])) ?>" class="btn btn-sm btn-primary">Edit</a>
+                                        <a href="<?= e(app_url(str_replace('/students', '/enrollments', $studentRoutePrefix) . '/student.php?id=' . $student['student_id'])) ?>" class="btn btn-sm btn-outline-secondary">Modules</a>
+                                        <a href="<?= e(app_url($studentRoutePrefix . '/face-enroll.php?id=' . $student['student_id'])) ?>" class="btn btn-sm btn-outline-secondary">Face</a>
+                                        <a href="<?= e(app_url($studentRoutePrefix . '/reset-password.php?id=' . $student['student_id'])) ?>" class="btn btn-sm btn-outline-warning">Reset Password</a>
+                                    </div>
                                 </td>
                             <?php endif; ?>
                         </tr>

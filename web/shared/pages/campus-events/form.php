@@ -121,76 +121,86 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
                 <input type="hidden" name="campus_event_id" value="<?= (int) $campusEventId ?>">
             <?php endif; ?>
 
-            <div class="mb-3">
-                <label for="title" class="form-label">Title</label>
-                <input type="text" class="form-control" id="title" name="title" maxlength="200" required value="<?= e($form['title']) ?>">
-            </div>
+            <p class="app-required-note"><span class="app-required-note__mark" aria-hidden="true">*</span> <span class="visually-hidden">Asterisk means </span>Required</p>
 
-            <div class="mb-3">
-                <label for="description" class="form-label">Description</label>
-                <textarea class="form-control" id="description" name="description" rows="6"><?= e($form['description']) ?></textarea>
-                <div class="form-text">Plain text only. Line breaks are kept when displayed.</div>
-            </div>
-
-            <div class="mb-3">
-                <label for="poster" class="form-label">Poster Image (optional)</label>
-                <?php if ($isEdit && $existingPoster !== null): ?>
-                    <div class="mb-2">
-                        <img src="<?= e(campus_event_poster_url($academicRoutePrefix, (int) $campusEventId)) ?>" alt="" class="img-fluid rounded border" style="max-height: 180px;">
+            <div class="app-form-section">
+                <h2 class="app-form-section__title">Content</h2>
+                <div class="mb-3">
+                    <label for="title" class="form-label app-required">Title</label>
+                    <input type="text" class="form-control" id="title" name="title" maxlength="200" required value="<?= e($form['title']) ?>">
+                </div>
+                <div class="mb-3">
+                    <label for="description" class="form-label">Description</label>
+                    <textarea class="form-control" id="description" name="description" rows="6"><?= e($form['description']) ?></textarea>
+                    <div class="form-text">Plain text only. Line breaks are kept when displayed.</div>
+                </div>
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label for="start_datetime" class="form-label app-required">Start date/time</label>
+                        <input type="datetime-local" class="form-control" id="start_datetime" name="start_datetime" required value="<?= e($form['start_datetime']) ?>">
                     </div>
-                <?php endif; ?>
-                <input type="file" class="form-control" id="poster" name="poster" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp">
-                <div class="form-text">JPG, PNG, or WEBP. Leave empty when editing to keep the current poster.</div>
-            </div>
-
-            <div class="row">
-                <div class="col-md-6 mb-3">
-                    <label for="start_datetime" class="form-label">Start date/time</label>
-                    <input type="datetime-local" class="form-control" id="start_datetime" name="start_datetime" required value="<?= e($form['start_datetime']) ?>">
-                </div>
-                <div class="col-md-6 mb-3">
-                    <label for="end_datetime" class="form-label">End date/time</label>
-                    <input type="datetime-local" class="form-control" id="end_datetime" name="end_datetime" required value="<?= e($form['end_datetime']) ?>">
-                </div>
-            </div>
-
-            <div class="mb-3">
-                <label for="location" class="form-label">Location</label>
-                <input type="text" class="form-control" id="location" name="location" maxlength="150" value="<?= e($form['location']) ?>">
-            </div>
-
-            <div class="mb-3">
-                <div class="form-label">Target Audience</div>
-                <div class="form-check mb-2">
-                    <input class="form-check-input" type="checkbox" id="target_select_all" <?= $allSelected ? 'checked' : '' ?>>
-                    <label class="form-check-label" for="target_select_all">Select All</label>
-                </div>
-                <?php foreach (campus_event_selectable_roles() as $role): ?>
-                    <div class="form-check">
-                        <input class="form-check-input campus-event-target-role" type="checkbox" name="target_roles[]" id="target_role_<?= e($role) ?>" value="<?= e($role) ?>" <?= in_array($role, $selectedTargets, true) ? 'checked' : '' ?>>
-                        <label class="form-check-label" for="target_role_<?= e($role) ?>"><?= e(campus_event_target_label($role)) ?></label>
+                    <div class="col-md-6 mb-3">
+                        <label for="end_datetime" class="form-label app-required">End date/time</label>
+                        <input type="datetime-local" class="form-control" id="end_datetime" name="end_datetime" required value="<?= e($form['end_datetime']) ?>">
                     </div>
-                <?php endforeach; ?>
+                </div>
+                <div class="mb-0">
+                    <label for="location" class="form-label">Location</label>
+                    <input type="text" class="form-control" id="location" name="location" maxlength="150" value="<?= e($form['location']) ?>">
+                </div>
+            </div>
+
+            <div class="app-form-section">
+                <h2 class="app-form-section__title">Audience</h2>
+                <div class="app-audience-list">
+                    <div class="form-check mb-2">
+                        <input class="form-check-input" type="checkbox" id="target_select_all" <?= $allSelected ? 'checked' : '' ?>>
+                        <label class="form-check-label" for="target_select_all">Select All</label>
+                    </div>
+                    <?php foreach (campus_event_selectable_roles() as $role): ?>
+                        <div class="form-check">
+                            <input class="form-check-input campus-event-target-role" type="checkbox" name="target_roles[]" id="target_role_<?= e($role) ?>" value="<?= e($role) ?>" <?= in_array($role, $selectedTargets, true) ? 'checked' : '' ?>>
+                            <label class="form-check-label" for="target_role_<?= e($role) ?>"><?= e(campus_event_target_label($role)) ?></label>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
                 <div class="form-text">Select at least one audience. Select All saves Students, Lecturers, Academic Staff, and Admin.</div>
             </div>
 
-            <div class="row">
-                <div class="col-md-4 mb-3">
-                    <label for="status" class="form-label">Status</label>
-                    <select class="form-select" id="status" name="status" required>
-                        <?php foreach (campus_event_statuses() as $status): ?>
-                            <option value="<?= e($status) ?>" <?= $form['status'] === $status ? 'selected' : '' ?>><?= e($status) ?></option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
-                <div class="col-md-8 mb-3">
-                    <label for="published_at" class="form-label">Publish date/time</label>
-                    <input type="datetime-local" class="form-control" id="published_at" name="published_at" value="<?= e($form['published_at']) ?>">
-                    <div class="form-text">Leave blank when publishing to use the current application time.</div>
+            <div class="app-form-section">
+                <h2 class="app-form-section__title">Schedule / Status</h2>
+                <div class="row">
+                    <div class="col-md-4 mb-3">
+                        <label for="status" class="form-label app-required">Status</label>
+                        <select class="form-select" id="status" name="status" required>
+                            <?php foreach (campus_event_statuses() as $status): ?>
+                                <option value="<?= e($status) ?>" <?= $form['status'] === $status ? 'selected' : '' ?>><?= e($status) ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div class="col-md-8 mb-3">
+                        <label for="published_at" class="form-label">Publish date/time</label>
+                        <input type="datetime-local" class="form-control" id="published_at" name="published_at" value="<?= e($form['published_at']) ?>">
+                        <div class="form-text">Leave blank when publishing to use the current application time.</div>
+                    </div>
                 </div>
             </div>
 
-            <div class="d-flex gap-2">
+            <div class="app-form-section">
+                <h2 class="app-form-section__title">Poster</h2>
+                <div class="mb-0">
+                    <label for="poster" class="form-label">Poster Image (optional)</label>
+                    <?php if ($isEdit && $existingPoster !== null): ?>
+                        <div class="mb-2">
+                            <img src="<?= e(campus_event_poster_url($academicRoutePrefix, (int) $campusEventId)) ?>" alt="" class="img-fluid rounded border" style="max-height: 180px;">
+                        </div>
+                    <?php endif; ?>
+                    <input type="file" class="form-control" id="poster" name="poster" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp">
+                    <div class="form-text">JPG, PNG, or WEBP. Leave empty when editing to keep the current poster.</div>
+                </div>
+            </div>
+
+            <div class="app-form-actions">
                 <button type="submit" class="btn btn-primary"><?= $isEdit ? 'Save changes' : 'Create event' ?></button>
                 <a href="<?= e(app_url($academicRoutePrefix . '/events/index.php')) ?>" class="btn btn-outline-secondary">Cancel</a>
             </div>

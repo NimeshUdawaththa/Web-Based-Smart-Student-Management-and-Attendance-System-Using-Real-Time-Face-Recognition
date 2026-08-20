@@ -23,12 +23,12 @@ $courses = list_courses();
 require INCLUDES_PATH . '/dashboard-layout-start.php';
 ?>
 
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <p class="text-muted mb-0">A batch is a student intake attached to one course.</p>
+<div class="app-list-toolbar">
+    <p class="app-list-toolbar__desc">A batch is a student intake attached to one course.</p>
     <a href="<?= e(app_url($academicRoutePrefix . '/batches/create.php')) ?>" class="btn btn-primary">Add Batch</a>
 </div>
 
-<form method="get" class="card shadow-sm mb-4">
+<form method="get" class="card app-filter-card mb-4">
     <div class="card-body">
         <div class="row g-3">
             <div class="col-md-4">
@@ -51,9 +51,11 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
                     <?php endforeach; ?>
                 </select>
             </div>
-            <div class="col-md-5 d-flex align-items-end gap-2">
-                <button type="submit" class="btn btn-outline-primary">Filter</button>
-                <a href="<?= e(app_url($academicRoutePrefix . '/batches/index.php')) ?>" class="btn btn-outline-secondary">Reset</a>
+            <div class="col-md-5 d-flex align-items-end">
+                <div class="app-filter-actions">
+                    <button type="submit" class="btn btn-outline-primary">Filter</button>
+                    <a href="<?= e(app_url($academicRoutePrefix . '/batches/index.php')) ?>" class="btn btn-outline-secondary">Reset</a>
+                </div>
             </div>
         </div>
     </div>
@@ -78,7 +80,13 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
             </thead>
             <tbody>
                 <?php if ($batches === []): ?>
-                    <tr><td colspan="10" class="text-center text-muted py-4">No batches found.</td></tr>
+                    <tr>
+                        <td colspan="10" class="p-0">
+                            <div class="app-empty-state">
+                                <p class="app-empty-state__title mb-0">No batches found.</p>
+                            </div>
+                        </td>
+                    </tr>
                 <?php else: ?>
                     <?php foreach ($batches as $batch): ?>
                         <tr>
@@ -92,8 +100,10 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
                             <td><?= e((string) $batch['schedule_count']) ?></td>
                             <td><?= e((string) $batch['session_count']) ?></td>
                             <td class="text-end">
-                                <a href="<?= e(app_url($academicRoutePrefix . '/batches/view.php?id=' . $batch['batch_id'])) ?>" class="btn btn-sm btn-outline-secondary">View</a>
-                                <a href="<?= e(app_url($academicRoutePrefix . '/batches/edit.php?id=' . $batch['batch_id'])) ?>" class="btn btn-sm btn-outline-primary">Edit</a>
+                                <div class="app-actions">
+                                    <a href="<?= e(app_url($academicRoutePrefix . '/batches/view.php?id=' . $batch['batch_id'])) ?>" class="btn btn-sm btn-outline-secondary">View</a>
+                                    <a href="<?= e(app_url($academicRoutePrefix . '/batches/edit.php?id=' . $batch['batch_id'])) ?>" class="btn btn-sm btn-outline-primary">Edit</a>
+                                </div>
                             </td>
                         </tr>
                     <?php endforeach; ?>

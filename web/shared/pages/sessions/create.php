@@ -89,58 +89,76 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
 <form method="post" class="card shadow-sm">
     <div class="card-body">
         <?= csrf_field() ?>
-        <div class="row g-3">
-            <div class="col-md-6">
-                <label for="module_id" class="form-label">Module</label>
-                <select class="form-select" id="module_id" name="module_id" required>
-                    <option value="">Select module</option>
-                    <?php foreach ($modules as $module): ?>
-                        <option value="<?= e((string) $module['module_id']) ?>" <?= $form['module_id'] === (string) $module['module_id'] ? 'selected' : '' ?>>
-                            <?= e($module['module_code'] . ' – ' . $module['module_name']) ?>
-                        </option>
-                    <?php endforeach; ?>
-                </select>
-            </div>
-            <div class="col-md-6">
-                <label for="lecturer_id" class="form-label">Lecturer</label>
-                <select class="form-select" id="lecturer_id" name="lecturer_id" required></select>
-            </div>
-            <div class="col-md-6">
-                <label for="batch_id" class="form-label">Batch</label>
-                <select class="form-select" id="batch_id" name="batch_id" required></select>
-            </div>
-            <div class="col-md-6">
-                <label for="session_date" class="form-label">Date</label>
-                <input type="date" class="form-control" id="session_date" name="session_date" value="<?= e($form['session_date']) ?>" required>
-            </div>
-            <div class="col-md-3">
-                <label for="scheduled_start" class="form-label">Start Time</label>
-                <input type="time" class="form-control" id="scheduled_start" name="scheduled_start" value="<?= e($form['scheduled_start']) ?>" required>
-            </div>
-            <div class="col-md-3">
-                <label for="scheduled_end" class="form-label">End Time</label>
-                <input type="time" class="form-control" id="scheduled_end" name="scheduled_end" value="<?= e($form['scheduled_end']) ?>" required>
-            </div>
-            <div class="col-md-3">
-                <label for="break_start" class="form-label">Official Break Start</label>
-                <input type="time" class="form-control" id="break_start" name="break_start" value="<?= e($form['break_start']) ?>">
-            </div>
-            <div class="col-md-3">
-                <label for="break_end" class="form-label">Official Break End</label>
-                <input type="time" class="form-control" id="break_end" name="break_end" value="<?= e($form['break_end']) ?>">
-                <div class="form-text">Optional. Leave empty for no official break.</div>
-            </div>
-            <div class="col-md-3">
-                <label for="room" class="form-label">Room</label>
-                <input type="text" class="form-control" id="room" name="room" value="<?= e($form['room']) ?>">
-            </div>
-            <div class="col-md-3">
-                <label for="late_after_minutes" class="form-label">Late after (minutes)</label>
-                <input type="number" min="0" max="180" class="form-control" id="late_after_minutes" name="late_after_minutes" value="<?= e($form['late_after_minutes']) ?>" required>
-                <div class="form-text">Used later for Late attendance. Not calculated yet.</div>
+        <p class="app-required-note"><span class="app-required-note__mark" aria-hidden="true">*</span> <span class="visually-hidden">Asterisk means </span>Required</p>
+
+        <div class="app-form-section">
+            <h2 class="app-form-section__title">Session Details</h2>
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label for="module_id" class="form-label app-required">Module</label>
+                    <select class="form-select" id="module_id" name="module_id" required>
+                        <option value="">Select module</option>
+                        <?php foreach ($modules as $module): ?>
+                            <option value="<?= e((string) $module['module_id']) ?>" <?= $form['module_id'] === (string) $module['module_id'] ? 'selected' : '' ?>>
+                                <?= e($module['module_code'] . ' – ' . $module['module_name']) ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="col-md-6">
+                    <label for="lecturer_id" class="form-label app-required">Lecturer</label>
+                    <select class="form-select" id="lecturer_id" name="lecturer_id" required></select>
+                </div>
+                <div class="col-md-6">
+                    <label for="batch_id" class="form-label app-required">Batch</label>
+                    <select class="form-select" id="batch_id" name="batch_id" required></select>
+                </div>
+                <div class="col-md-6">
+                    <label for="session_date" class="form-label app-required">Date</label>
+                    <input type="date" class="form-control" id="session_date" name="session_date" value="<?= e($form['session_date']) ?>" required>
+                </div>
             </div>
         </div>
-        <div class="mt-4">
+
+        <div class="app-form-section">
+            <h2 class="app-form-section__title">Schedule</h2>
+            <div class="row g-3">
+                <div class="col-md-3">
+                    <label for="scheduled_start" class="form-label app-required">Start Time</label>
+                    <input type="time" class="form-control" id="scheduled_start" name="scheduled_start" value="<?= e($form['scheduled_start']) ?>" required>
+                </div>
+                <div class="col-md-3">
+                    <label for="scheduled_end" class="form-label app-required">End Time</label>
+                    <input type="time" class="form-control" id="scheduled_end" name="scheduled_end" value="<?= e($form['scheduled_end']) ?>" required>
+                </div>
+                <div class="col-md-3">
+                    <label for="break_start" class="form-label">Official Break Start</label>
+                    <input type="time" class="form-control" id="break_start" name="break_start" value="<?= e($form['break_start']) ?>">
+                </div>
+                <div class="col-md-3">
+                    <label for="break_end" class="form-label">Official Break End</label>
+                    <input type="time" class="form-control" id="break_end" name="break_end" value="<?= e($form['break_end']) ?>">
+                    <div class="form-text">Optional. Leave empty for no official break.</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="app-form-section">
+            <h2 class="app-form-section__title">Settings</h2>
+            <div class="row g-3">
+                <div class="col-md-3">
+                    <label for="room" class="form-label">Room</label>
+                    <input type="text" class="form-control" id="room" name="room" value="<?= e($form['room']) ?>">
+                </div>
+                <div class="col-md-3">
+                    <label for="late_after_minutes" class="form-label app-required">Late after (minutes)</label>
+                    <input type="number" min="0" max="180" class="form-control" id="late_after_minutes" name="late_after_minutes" value="<?= e($form['late_after_minutes']) ?>" required>
+                    <div class="form-text">Used later for Late attendance. Not calculated yet.</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="app-form-actions">
             <button type="submit" class="btn btn-primary">Create Session</button>
         </div>
     </div>

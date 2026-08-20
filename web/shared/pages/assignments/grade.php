@@ -106,16 +106,22 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
             <form method="post">
                 <?= csrf_field() ?>
                 <input type="hidden" name="submission_id" value="<?= e((string) $submissionId) ?>">
-                <div class="mb-3">
-                    <label for="grade" class="form-label">Grade</label>
-                    <input type="text" inputmode="decimal" class="form-control" id="grade" name="grade" required value="<?= e($form['grade']) ?>">
-                    <div class="form-text">Must be between 0 and <?= e((string) $assignment['max_marks']) ?>.</div>
+                <p class="app-required-note"><span class="app-required-note__mark" aria-hidden="true">*</span> <span class="visually-hidden">Asterisk means </span>Required</p>
+                <div class="app-form-section">
+                    <h2 class="app-form-section__title">Grade</h2>
+                    <div class="mb-3">
+                        <label for="grade" class="form-label app-required">Grade</label>
+                        <input type="text" inputmode="decimal" class="form-control" id="grade" name="grade" required value="<?= e($form['grade']) ?>">
+                        <div class="form-text">Must be between 0 and <?= e((string) $assignment['max_marks']) ?>.</div>
+                    </div>
+                    <div class="mb-0">
+                        <label for="feedback" class="form-label">Feedback <span class="text-muted">(optional)</span></label>
+                        <textarea class="form-control" id="feedback" name="feedback" rows="5"><?= e($form['feedback']) ?></textarea>
+                    </div>
                 </div>
-                <div class="mb-3">
-                    <label for="feedback" class="form-label">Feedback <span class="text-muted">(optional)</span></label>
-                    <textarea class="form-control" id="feedback" name="feedback" rows="5"><?= e($form['feedback']) ?></textarea>
+                <div class="app-form-actions">
+                    <button type="submit" class="btn btn-primary">Save grade</button>
                 </div>
-                <button type="submit" class="btn btn-primary">Save grade</button>
             </form>
         <?php else: ?>
             <p class="mb-2"><strong>Grade:</strong> <?= e(format_assignment_grade_display($submission['grade'], $assignment['max_marks'])) ?></p>

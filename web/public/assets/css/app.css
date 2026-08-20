@@ -533,6 +533,25 @@ body {
     vertical-align: middle;
 }
 
+.table td .badge {
+    margin: 0.1rem 0;
+}
+
+.table .app-actions {
+    max-width: 22rem;
+    margin-left: auto;
+}
+
+.table .app-actions .btn,
+.table .app-actions .btn-group,
+.table .app-actions form {
+    margin-left: 0;
+}
+
+.table .app-actions form.d-inline {
+    display: inline;
+}
+
 .app-table-sticky thead th {
     position: sticky;
     top: 0;
@@ -547,6 +566,18 @@ body {
     white-space: nowrap;
 }
 
+.app-text-truncate--sm {
+    max-width: 10rem;
+}
+
+.app-text-truncate--md {
+    max-width: 14rem;
+}
+
+.app-text-truncate--lg {
+    max-width: 20rem;
+}
+
 .app-actions {
     display: inline-flex;
     flex-wrap: wrap;
@@ -559,6 +590,10 @@ body {
     gap: 0.4rem;
 }
 
+.app-actions .dropdown-menu {
+    min-width: 10rem;
+}
+
 .table-responsive {
     border-radius: 0 0 var(--ams-radius-lg) var(--ams-radius-lg);
 }
@@ -568,19 +603,30 @@ body {
     border-bottom-right-radius: var(--ams-radius-lg);
 }
 
+/* Compact empty row inside tables */
+.table td .app-empty-state {
+    padding: 1.75rem 1rem;
+}
+
+.table td .app-empty-state__title {
+    font-size: 0.98rem;
+}
+
 /* -----------------------------------------------------------------------------
    Filter cards / toolbars
    ----------------------------------------------------------------------------- */
 
 .app-filter-card,
-form.card.shadow-sm.mb-4 {
+form.card.shadow-sm.mb-4,
+form.app-filter-card {
     background-color: var(--ams-subtle);
     border-color: var(--ams-border);
     box-shadow: none !important;
 }
 
 .app-filter-card .card-body,
-form.card.shadow-sm.mb-4 > .card-body {
+form.card.shadow-sm.mb-4 > .card-body,
+form.app-filter-card > .card-body {
     padding: 1rem 1.15rem;
 }
 
@@ -589,6 +635,32 @@ form.card.shadow-sm.mb-4 > .card-body {
     flex-wrap: wrap;
     gap: 0.75rem 1rem;
     align-items: flex-end;
+}
+
+.app-filter-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: end;
+    gap: 0.5rem;
+}
+
+.app-filter-actions .btn {
+    min-width: 5.5rem;
+}
+
+.app-list-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem 1rem;
+    margin-bottom: 1rem;
+}
+
+.app-list-toolbar__desc {
+    margin: 0;
+    color: var(--ams-text-muted);
+    flex: 1 1 14rem;
 }
 
 /* -----------------------------------------------------------------------------
@@ -618,22 +690,82 @@ form.card.shadow-sm.mb-4 > .card-body {
     box-shadow: 0 0 0 0.2rem rgba(var(--ams-primary-rgb), 0.18);
 }
 
+.form-control.is-invalid,
+.form-select.is-invalid {
+    border-color: #dc3545;
+}
+
 .app-required::after {
     content: " *";
     color: #dc3545;
     font-weight: 700;
 }
 
+.app-required-note {
+    margin: 0 0 1rem;
+    font-size: 0.875rem;
+    color: var(--ams-text-muted);
+}
+
+.app-required-note__mark {
+    color: #dc3545;
+    font-weight: 700;
+}
+
 .app-form-section {
-    padding-bottom: 1rem;
-    margin-bottom: 1rem;
+    padding-bottom: 1.15rem;
+    margin-bottom: 1.15rem;
     border-bottom: 1px solid var(--ams-border);
 }
 
-.app-form-section:last-child {
+.app-form-section:last-of-type {
     border-bottom: 0;
     margin-bottom: 0;
     padding-bottom: 0;
+}
+
+.app-form-section__title {
+    margin: 0 0 0.85rem;
+    font-size: 0.95rem;
+    font-weight: 650;
+    letter-spacing: -0.01em;
+    color: var(--ams-text);
+}
+
+.app-form-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: 1.25rem;
+    padding-top: 0.25rem;
+}
+
+.app-checkbox-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
+    gap: 0.35rem 1rem;
+}
+
+.app-checkbox-grid .form-check {
+    margin: 0;
+    padding: 0.45rem 0.55rem 0.45rem 1.85rem;
+    border: 1px solid transparent;
+    border-radius: var(--ams-radius-sm);
+}
+
+.app-checkbox-grid .form-check:hover {
+    background: var(--ams-subtle);
+    border-color: var(--ams-border);
+}
+
+.app-audience-list .form-check {
+    padding: 0.4rem 0.5rem 0.4rem 1.85rem;
+    border-radius: var(--ams-radius-sm);
+}
+
+.app-audience-list .form-check:hover {
+    background: var(--ams-subtle);
 }
 
 /* -----------------------------------------------------------------------------

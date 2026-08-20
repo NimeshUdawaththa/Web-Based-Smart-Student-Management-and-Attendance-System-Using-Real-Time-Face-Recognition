@@ -124,7 +124,13 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
             </thead>
             <tbody>
                 <?php if ($students === []): ?>
-                    <tr><td colspan="4" class="text-center text-muted py-4">No active students found.</td></tr>
+                    <tr>
+                        <td colspan="4" class="p-0">
+                            <div class="app-empty-state">
+                                <p class="app-empty-state__title mb-0">No active students found.</p>
+                            </div>
+                        </td>
+                    </tr>
                 <?php else: ?>
                     <?php foreach ($students as $student): ?>
                         <tr>
@@ -132,7 +138,9 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
                             <td><?= e($student['first_name'] . ' ' . $student['last_name']) ?></td>
                             <td><?= e($student['course_code'] . ' – ' . $student['batch_name']) ?></td>
                             <td class="text-end">
-                                <a href="<?= e(app_url($academicRoutePrefix . '/enrollments/student.php?id=' . $student['student_id'])) ?>" class="btn btn-sm btn-outline-primary">Manage Modules</a>
+                                <div class="app-actions">
+                                    <a href="<?= e(app_url($academicRoutePrefix . '/enrollments/student.php?id=' . $student['student_id'])) ?>" class="btn btn-sm btn-outline-primary">Manage Modules</a>
+                                </div>
                             </td>
                         </tr>
                     <?php endforeach; ?>
