@@ -12,6 +12,5 @@ if ($lecturer === null) {
 }
 
 $studentRoutePrefix = 'lecturer/students';
-$readOnly = true;
 $restrictLecturerId = (int) $lecturer['lecturer_id'];
-require WEB_PATH . '/shared/pages/students/index.php';
+require WEB_PATH . '/shared/pages/students/view.php';

@@ -964,8 +964,13 @@ function list_students(array $filters = []): array
     $params = [];
 
     if (!empty($filters['search'])) {
-        $sql .= ' AND (s.registration_no LIKE :search OR s.first_name LIKE :search OR s.last_name LIKE :search OR u.email LIKE :search OR u.username LIKE :search)';
-        $params['search'] = '%' . $filters['search'] . '%';
+        $sql .= ' AND (s.registration_no LIKE :search1 OR s.first_name LIKE :search2 OR s.last_name LIKE :search3 OR u.email LIKE :search4 OR u.username LIKE :search5)';
+        $searchTerm = '%' . $filters['search'] . '%';
+        $params['search1'] = $searchTerm;
+        $params['search2'] = $searchTerm;
+        $params['search3'] = $searchTerm;
+        $params['search4'] = $searchTerm;
+        $params['search5'] = $searchTerm;
     }
 
     if (!empty($filters['course_id'])) {

@@ -10,28 +10,46 @@ if (!defined('APP_STARTED')) {
 /** @var string $studentRoutePrefix e.g. admin/students or academic-staff/students */
 $studentRoutePrefix = $studentRoutePrefix ?? 'admin/students';
 $readOnly = $readOnly ?? false;
+/** @var int|null $restrictLecturerId */
+$restrictLecturerId = $restrictLecturerId ?? null;
+$isLecturerDirectory = $restrictLecturerId !== null && $restrictLecturerId > 0;
 
-$pageTitle = 'Student Management';
+$pageTitle = $isLecturerDirectory ? 'Student Directory' : 'Student Management';
 $search = trim((string) ($_GET['search'] ?? ''));
 $courseId = positive_int($_GET['course_id'] ?? null);
 $batchId = positive_int($_GET['batch_id'] ?? null);
+$moduleId = positive_int($_GET['module_id'] ?? null);
 $status = (string) ($_GET['status'] ?? '');
 
 $filters = array_filter([
     'search' => $search,
     'course_id' => $courseId,
     'batch_id' => $batchId,
+    'module_id' => $isLecturerDirectory ? $moduleId : null,
     'status' => in_array($status, student_statuses(), true) ? $status : null,
 ]);
 
-$students = list_students($filters);
-$courses = list_active_courses();
+if ($isLecturerDirectory) {
+    $students = list_students_for_lecturer($restrictLecturerId, $filters);
+    $courses = list_courses_for_lecturer_directory($restrictLecturerId);
+    $batches = list_batches_for_lecturer_directory($restrictLecturerId, $courseId);
+    $modules = list_module_lecturer_assignments(null, $restrictLecturerId);
+} else {
+    $students = list_students($filters);
+    $courses = list_active_courses();
+    $batches = [];
+    $modules = [];
+}
 
 require INCLUDES_PATH . '/dashboard-layout-start.php';
 ?>
 
 <div class="d-flex justify-content-between align-items-center mb-4">
-    <p class="text-muted mb-0">View and manage student records.</p>
+    <p class="text-muted mb-0">
+        <?= $isLecturerDirectory
+            ? 'Students currently enrolled in modules assigned to you.'
+            : 'View and manage student records.' ?>
+    </p>
     <?php if (!$readOnly): ?>
         <a href="<?= e(app_url($studentRoutePrefix . '/register.php')) ?>" class="btn btn-primary">Register Student</a>
     <?php endif; ?>
@@ -40,7 +58,7 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
 <form method="get" class="card shadow-sm mb-4">
     <div class="card-body">
         <div class="row g-3">
-            <div class="col-md-4">
+            <div class="col-md-<?= $isLecturerDirectory ? '3' : '4' ?>">
                 <label for="search" class="form-label">Search</label>
                 <input type="text" class="form-control" id="search" name="search" value="<?= e($search) ?>" placeholder="Registration no, name, email">
             </div>
@@ -55,6 +73,30 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
                     <?php endforeach; ?>
                 </select>
             </div>
+            <?php if ($isLecturerDirectory): ?>
+                <div class="col-md-2">
+                    <label for="batch_id" class="form-label">Batch</label>
+                    <select class="form-select" id="batch_id" name="batch_id">
+                        <option value="">All batches</option>
+                        <?php foreach ($batches as $batch): ?>
+                            <option value="<?= e((string) $batch['batch_id']) ?>" <?= $batchId === (int) $batch['batch_id'] ? 'selected' : '' ?>>
+                                <?= e($batch['batch_name']) ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label for="module_id" class="form-label">Module</label>
+                    <select class="form-select" id="module_id" name="module_id">
+                        <option value="">All my modules</option>
+                        <?php foreach ($modules as $module): ?>
+                            <option value="<?= e((string) $module['module_id']) ?>" <?= $moduleId === (int) $module['module_id'] ? 'selected' : '' ?>>
+                                <?= e($module['module_code'] . ' – ' . $module['module_name']) ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+            <?php endif; ?>
             <div class="col-md-2">
                 <label for="status" class="form-label">Status</label>
                 <select class="form-select" id="status" name="status">
@@ -64,7 +106,7 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
                     <?php endforeach; ?>
                 </select>
             </div>
-            <div class="col-md-3 d-flex align-items-end gap-2">
+            <div class="col-md-<?= $isLecturerDirectory ? '12' : '3' ?> d-flex align-items-end gap-2">
                 <button type="submit" class="btn btn-outline-primary">Filter</button>
                 <a href="<?= e(app_url($studentRoutePrefix . '/index.php')) ?>" class="btn btn-outline-secondary">Reset</a>
             </div>
@@ -82,17 +124,28 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
                     <th>Email</th>
                     <th>Course</th>
                     <th>Batch</th>
+                    <?php if ($isLecturerDirectory): ?>
+                        <th>Enrolled Modules</th>
+                    <?php endif; ?>
                     <th>Status</th>
                     <th>Face</th>
-                    <?php if (!$readOnly): ?>
+                    <?php if (!$readOnly || $isLecturerDirectory): ?>
                         <th class="text-end">Actions</th>
                     <?php endif; ?>
                 </tr>
             </thead>
             <tbody>
+                <?php
+                $colspan = 7;
+                if ($isLecturerDirectory) {
+                    $colspan += 2;
+                } elseif (!$readOnly) {
+                    $colspan += 1;
+                }
+                ?>
                 <?php if ($students === []): ?>
                     <tr>
-                        <td colspan="<?= $readOnly ? 7 : 8 ?>" class="text-center text-muted py-4">No students found.</td>
+                        <td colspan="<?= $colspan ?>" class="text-center text-muted py-4">No students found.</td>
                     </tr>
                 <?php else: ?>
                     <?php foreach ($students as $student): ?>
@@ -102,9 +155,16 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
                             <td><?= e($student['email']) ?></td>
                             <td><?= e($student['course_code']) ?></td>
                             <td><?= e($student['batch_name']) ?></td>
+                            <?php if ($isLecturerDirectory): ?>
+                                <td><?= e((string) ($student['enrolled_modules'] ?? '')) ?></td>
+                            <?php endif; ?>
                             <td><span class="badge <?= e(status_badge_class($student['status'])) ?>"><?= e($student['status']) ?></span></td>
                             <td><span class="badge <?= e(status_badge_class($student['face_status'])) ?>"><?= e($student['face_status']) ?></span></td>
-                            <?php if (!$readOnly): ?>
+                            <?php if ($isLecturerDirectory): ?>
+                                <td class="text-end">
+                                    <a href="<?= e(app_url($studentRoutePrefix . '/view.php?id=' . $student['student_id'])) ?>" class="btn btn-sm btn-outline-primary">View</a>
+                                </td>
+                            <?php elseif (!$readOnly): ?>
                                 <td class="text-end">
                                     <a href="<?= e(app_url($studentRoutePrefix . '/edit.php?id=' . $student['student_id'])) ?>" class="btn btn-sm btn-outline-primary">Edit</a>
                                     <a href="<?= e(app_url(str_replace('/students', '/enrollments', $studentRoutePrefix) . '/student.php?id=' . $student['student_id'])) ?>" class="btn btn-sm btn-outline-secondary">Modules</a>

@@ -1365,6 +1365,216 @@ function list_student_module_enrolments(int $studentId): array
 }
 
 /**
+ * Lecturer Student Directory: student is visible only when they share at least one
+ * ENROLLED student_modules row with a module assigned to the lecturer.
+ */
+function lecturer_can_view_student(int $lecturerId, int $studentId): bool
+{
+    if ($lecturerId <= 0 || $studentId <= 0) {
+        return false;
+    }
+
+    $statement = db()->prepare(
+        "SELECT sm.student_module_id
+         FROM student_modules sm
+         INNER JOIN module_lecturers ml
+           ON ml.module_id = sm.module_id
+          AND ml.lecturer_id = :lecturer_id
+         WHERE sm.student_id = :student_id
+           AND sm.status = 'ENROLLED'
+         LIMIT 1"
+    );
+    $statement->execute([
+        'lecturer_id' => $lecturerId,
+        'student_id' => $studentId,
+    ]);
+
+    return $statement->fetch() !== false;
+}
+
+/**
+ * Modules the lecturer teaches that the student is currently ENROLLED in.
+ *
+ * @return list<array<string, mixed>>
+ */
+function list_shared_enrolled_modules_for_lecturer_student(int $lecturerId, int $studentId): array
+{
+    $statement = db()->prepare(
+        "SELECT sm.student_module_id, sm.module_id, sm.enrolled_at, sm.status,
+                m.module_code, m.module_name, m.semester, m.status AS module_status
+         FROM student_modules sm
+         INNER JOIN module_lecturers ml
+           ON ml.module_id = sm.module_id
+          AND ml.lecturer_id = :lecturer_id
+         INNER JOIN modules m ON m.module_id = sm.module_id
+         WHERE sm.student_id = :student_id
+           AND sm.status = 'ENROLLED'
+         ORDER BY m.module_code"
+    );
+    $statement->execute([
+        'lecturer_id' => $lecturerId,
+        'student_id' => $studentId,
+    ]);
+
+    return $statement->fetchAll();
+}
+
+/**
+ * Students visible in the Lecturer Student Directory (DISTINCT by student).
+ *
+ * @param array{
+ *   search?: string,
+ *   course_id?: int,
+ *   batch_id?: int,
+ *   module_id?: int,
+ *   status?: string
+ * } $filters
+ * @return list<array<string, mixed>>
+ */
+function list_students_for_lecturer(int $lecturerId, array $filters = []): array
+{
+    if ($lecturerId <= 0) {
+        return [];
+    }
+
+    $moduleFilter = !empty($filters['module_id']) ? positive_int($filters['module_id']) : null;
+    if ($moduleFilter !== null && !lecturer_is_assigned_to_module($lecturerId, $moduleFilter)) {
+        return [];
+    }
+
+    $sql = "SELECT s.student_id, s.registration_no, s.first_name, s.last_name, s.phone,
+                   s.date_of_birth, s.gender, s.enrollment_date, s.status,
+                   u.user_id, u.username, u.email, u.status AS account_status,
+                   c.course_id, c.course_code, c.course_name,
+                   b.batch_id, b.batch_name,
+                   CASE
+                       WHEN fp.face_profile_id IS NOT NULL AND fp.status = 'ACTIVE' THEN 'ENROLLED'
+                       ELSE 'NOT ENROLLED'
+                   END AS face_status,
+                   GROUP_CONCAT(DISTINCT m.module_code ORDER BY m.module_code SEPARATOR ', ') AS enrolled_modules
+            FROM students s
+            INNER JOIN users u ON u.user_id = s.user_id
+            INNER JOIN courses c ON c.course_id = s.course_id
+            INNER JOIN batches b ON b.batch_id = s.batch_id
+            INNER JOIN student_modules sm
+              ON sm.student_id = s.student_id
+             AND sm.status = 'ENROLLED'
+            INNER JOIN module_lecturers ml
+              ON ml.module_id = sm.module_id
+             AND ml.lecturer_id = :lecturer_id
+            INNER JOIN modules m ON m.module_id = sm.module_id
+            LEFT JOIN face_profiles fp ON fp.student_id = s.student_id AND fp.status = 'ACTIVE'
+            WHERE 1=1";
+    $params = ['lecturer_id' => $lecturerId];
+
+    if (!empty($filters['search'])) {
+        $sql .= ' AND (s.registration_no LIKE :search1 OR s.first_name LIKE :search2 OR s.last_name LIKE :search3 OR u.email LIKE :search4 OR u.username LIKE :search5)';
+        $searchTerm = '%' . $filters['search'] . '%';
+        $params['search1'] = $searchTerm;
+        $params['search2'] = $searchTerm;
+        $params['search3'] = $searchTerm;
+        $params['search4'] = $searchTerm;
+        $params['search5'] = $searchTerm;
+    }
+
+    if (!empty($filters['course_id'])) {
+        $sql .= ' AND s.course_id = :course_id';
+        $params['course_id'] = (int) $filters['course_id'];
+    }
+
+    if (!empty($filters['batch_id'])) {
+        $sql .= ' AND s.batch_id = :batch_id';
+        $params['batch_id'] = (int) $filters['batch_id'];
+    }
+
+    if ($moduleFilter !== null) {
+        $sql .= ' AND sm.module_id = :module_id';
+        $params['module_id'] = $moduleFilter;
+    }
+
+    if (!empty($filters['status']) && in_array($filters['status'], student_statuses(), true)) {
+        $sql .= ' AND s.status = :status';
+        $params['status'] = $filters['status'];
+    }
+
+    $sql .= ' GROUP BY s.student_id, s.registration_no, s.first_name, s.last_name, s.phone,
+                       s.date_of_birth, s.gender, s.enrollment_date, s.status,
+                       u.user_id, u.username, u.email, u.status,
+                       c.course_id, c.course_code, c.course_name,
+                       b.batch_id, b.batch_name, fp.face_profile_id, fp.status
+              ORDER BY s.created_at DESC, s.student_id DESC';
+
+    $statement = db()->prepare($sql);
+    $statement->execute($params);
+
+    return $statement->fetchAll();
+}
+
+/**
+ * Course options for lecturer directory filters (scoped; cannot widen access).
+ *
+ * @return list<array<string, mixed>>
+ */
+function list_courses_for_lecturer_directory(int $lecturerId): array
+{
+    if ($lecturerId <= 0) {
+        return [];
+    }
+
+    $statement = db()->prepare(
+        "SELECT DISTINCT c.course_id, c.course_code, c.course_name
+         FROM courses c
+         INNER JOIN students s ON s.course_id = c.course_id
+         INNER JOIN student_modules sm
+           ON sm.student_id = s.student_id
+          AND sm.status = 'ENROLLED'
+         INNER JOIN module_lecturers ml
+           ON ml.module_id = sm.module_id
+          AND ml.lecturer_id = :lecturer_id
+         ORDER BY c.course_code"
+    );
+    $statement->execute(['lecturer_id' => $lecturerId]);
+
+    return $statement->fetchAll();
+}
+
+/**
+ * Batch options for lecturer directory filters (scoped; cannot widen access).
+ *
+ * @return list<array<string, mixed>>
+ */
+function list_batches_for_lecturer_directory(int $lecturerId, ?int $courseId = null): array
+{
+    if ($lecturerId <= 0) {
+        return [];
+    }
+
+    $sql = "SELECT DISTINCT b.batch_id, b.batch_name, b.course_id, c.course_code
+            FROM batches b
+            INNER JOIN courses c ON c.course_id = b.course_id
+            INNER JOIN students s ON s.batch_id = b.batch_id
+            INNER JOIN student_modules sm
+              ON sm.student_id = s.student_id
+             AND sm.status = 'ENROLLED'
+            INNER JOIN module_lecturers ml
+              ON ml.module_id = sm.module_id
+             AND ml.lecturer_id = :lecturer_id
+            WHERE 1=1";
+    $params = ['lecturer_id' => $lecturerId];
+
+    if ($courseId !== null && $courseId > 0) {
+        $sql .= ' AND b.course_id = :course_id';
+        $params['course_id'] = $courseId;
+    }
+
+    $sql .= ' ORDER BY c.course_code, b.batch_name';
+    $statement = db()->prepare($sql);
+    $statement->execute($params);
+
+    return $statement->fetchAll();
+}
+
+/**
  * @return array<string, mixed>|null
  */
 function get_student_module_enrolment(int $studentId, int $moduleId): ?array
