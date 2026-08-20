@@ -90,6 +90,29 @@ if ($session['status'] !== 'COMPLETED') {
 $breakStartValue = optional_time_hm(isset($session['break_start']) ? (string) $session['break_start'] : null) ?? '';
 $breakEndValue = optional_time_hm(isset($session['break_end']) ? (string) $session['break_end'] : null) ?? '';
 
+$sessionStatus = (string) $session['status'];
+$presentCount = 0;
+$lateCount = 0;
+$absentCount = 0;
+if ($sessionStatus === 'COMPLETED') {
+    foreach ($finalRecords as $record) {
+        $recordStatus = strtoupper((string) ($record['status'] ?? ''));
+        if ($recordStatus === 'PRESENT') {
+            $presentCount++;
+        } elseif ($recordStatus === 'LATE') {
+            $lateCount++;
+        } elseif ($recordStatus === 'ABSENT') {
+            $absentCount++;
+        }
+    }
+}
+$pendingInsideCount = 0;
+foreach ($sessionPending as $pending) {
+    if ((int) ($pending['inside'] ?? 0) === 1) {
+        $pendingInsideCount++;
+    }
+}
+
 require INCLUDES_PATH . '/dashboard-layout-start.php';
 ?>
 
@@ -97,24 +120,25 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
     <a href="<?= e(app_url($academicRoutePrefix . '/sessions/index.php')) ?>" class="btn btn-outline-secondary btn-sm">&larr; Back to Sessions</a>
 </div>
 
+<div class="app-workflow-steps" aria-label="Session workflow">
+    <?php if ($sessionStatus === 'CANCELLED'): ?>
+        <span class="app-workflow-steps__item is-cancelled">Cancelled</span>
+    <?php else: ?>
+        <span class="app-workflow-steps__item <?= $sessionStatus === 'SCHEDULED' ? 'is-current' : 'is-done' ?>">Scheduled</span>
+        <span class="app-workflow-steps__sep" aria-hidden="true">→</span>
+        <span class="app-workflow-steps__item <?= $sessionStatus === 'IN_PROGRESS' ? 'is-current' : ($sessionStatus === 'COMPLETED' ? 'is-done' : '') ?>">In Progress</span>
+        <span class="app-workflow-steps__sep" aria-hidden="true">→</span>
+        <span class="app-workflow-steps__item <?= $sessionStatus === 'COMPLETED' ? 'is-current' : '' ?>">Completed</span>
+    <?php endif; ?>
+</div>
+
 <div class="card shadow-sm mb-4">
     <div class="card-body">
-        <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
+        <div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-3">
             <div>
                 <h2 class="h5 mb-1"><?= e($session['module_code'] . ' – ' . $session['module_name']) ?></h2>
-                <p class="text-muted mb-2">
-                    <?= e($session['course_code'] . ' · ' . $session['batch_name']) ?><br>
-                    <?= e($session['session_date']) ?>
-                    · Lecture <?= e(format_time_display($session['scheduled_start']) . ' – ' . format_time_display($session['scheduled_end'])) ?>
-                    · Room <?= e($session['room'] ?: '-') ?><br>
-                    Lecturer: <?= e($session['lecturer_first_name'] . ' ' . $session['lecturer_last_name']) ?><br>
-                    Late after: <?= e((string) $session['late_after_minutes']) ?> min
-                    (threshold <?= e($lateThreshold) ?>, not finalized)<br>
-                    Official break: <?= e(format_break_display($session['break_start'] ?? null, $session['break_end'] ?? null)) ?>
-                </p>
-                <span class="badge <?= e(status_badge_class($session['status'])) ?>"><?= e($session['status']) ?></span>
                 <?php if ($lifecycleNote !== ''): ?>
-                    <p class="small text-muted mb-0 mt-2"><?= e($lifecycleNote) ?></p>
+                    <p class="small text-muted mb-0"><?= e($lifecycleNote) ?></p>
                 <?php endif; ?>
             </div>
             <div class="d-flex gap-2 flex-wrap">
@@ -152,11 +176,41 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
                 <?php endif; ?>
             </div>
         </div>
+        <dl class="app-session-summary-grid mb-3">
+            <div>
+                <dt>Module</dt>
+                <dd><?= e($session['module_code'] . ' – ' . $session['module_name']) ?></dd>
+            </div>
+            <div>
+                <dt>Batch</dt>
+                <dd><?= e($session['course_code'] . ' · ' . $session['batch_name']) ?></dd>
+            </div>
+            <div>
+                <dt>Lecturer</dt>
+                <dd><?= e($session['lecturer_first_name'] . ' ' . $session['lecturer_last_name']) ?></dd>
+            </div>
+            <div>
+                <dt>Date</dt>
+                <dd><?= e((string) $session['session_date']) ?></dd>
+            </div>
+            <div>
+                <dt>Start – End</dt>
+                <dd><?= e(format_time_display($session['scheduled_start']) . ' – ' . format_time_display($session['scheduled_end'])) ?></dd>
+            </div>
+            <div>
+                <dt>Room</dt>
+                <dd><?= e($session['room'] ?: '—') ?></dd>
+            </div>
+            <div>
+                <dt>Status</dt>
+                <dd><span class="badge <?= e(status_badge_class($session['status'])) ?>"><?= e($session['status']) ?></span></dd>
+            </div>
+        </dl>
         <hr>
         <div class="row small">
             <div class="col-md-3"><strong>Actual start</strong><br><?= e($session['actual_start'] ?: 'Not started') ?></div>
             <div class="col-md-3"><strong>Actual end</strong><br><?= e($session['actual_end'] ?: 'Not ended') ?></div>
-            <div class="col-md-3"><strong>Late after</strong><br><?= e((string) $session['late_after_minutes']) ?> minutes</div>
+            <div class="col-md-3"><strong>Late after</strong><br><?= e((string) $session['late_after_minutes']) ?> minutes (threshold <?= e($lateThreshold) ?>)</div>
             <div class="col-md-3"><strong>Official break</strong><br><?= e(format_break_display($session['break_start'] ?? null, $session['break_end'] ?? null)) ?></div>
         </div>
     </div>
@@ -187,83 +241,42 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
     </div>
 <?php endif; ?>
 
-<div class="card shadow-sm mb-4" id="attendance-audit">
-    <div class="card-header bg-white d-flex justify-content-between align-items-center">
-        <h2 class="h6 mb-0">Event audit (raw IN/OUT)</h2>
-        <span class="badge text-bg-secondary"><?= count($sessionEvents) ?></span>
+<div class="row g-3 mb-4">
+    <div class="col-6 col-md-3">
+        <div class="metric-card">
+            <span class="metric-card__label">Eligible</span>
+            <span class="metric-card__value"><?= count($eligibleStudents) ?></span>
+        </div>
     </div>
-    <div class="table-responsive">
-        <table class="table table-sm mb-0 align-middle">
-            <thead class="table-light">
-                <tr>
-                    <th>Time</th>
-                    <th>Student</th>
-                    <th>Event</th>
-                    <th>Camera</th>
-                    <th>Confidence</th>
-                </tr>
-            </thead>
-            <tbody>
-                <?php if ($sessionEvents === []): ?>
-                    <tr><td colspan="5" class="text-center text-muted py-3">No IN/OUT events yet.</td></tr>
-                <?php else: ?>
-                    <?php foreach ($sessionEvents as $event): ?>
-                        <tr>
-                            <td><?= e((string) $event['recognized_at']) ?></td>
-                            <td><?= e($event['registration_no'] . ' · ' . $event['first_name'] . ' ' . $event['last_name']) ?></td>
-                            <td><span class="badge <?= e($event['event_type'] === 'IN' ? 'text-bg-success' : 'text-bg-secondary') ?>"><?= e($event['event_type']) ?></span></td>
-                            <td><?= e($event['camera_id'] ?: '-') ?></td>
-                            <td><?= e((string) $event['confidence']) ?></td>
-                        </tr>
-                    <?php endforeach; ?>
-                <?php endif; ?>
-            </tbody>
-        </table>
-    </div>
+    <?php if ($sessionStatus === 'COMPLETED'): ?>
+        <div class="col-6 col-md-3">
+            <div class="metric-card">
+                <span class="metric-card__label">Present</span>
+                <span class="metric-card__value"><?= $presentCount ?></span>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="metric-card">
+                <span class="metric-card__label">Late</span>
+                <span class="metric-card__value"><?= $lateCount ?></span>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="metric-card">
+                <span class="metric-card__label">Absent</span>
+                <span class="metric-card__value"><?= $absentCount ?></span>
+            </div>
+        </div>
+    <?php elseif ($canControl || $canManage): ?>
+        <div class="col-6 col-md-3">
+            <div class="metric-card">
+                <span class="metric-card__label">Pending Inside</span>
+                <span class="metric-card__value"><?= $pendingInsideCount ?></span>
+                <span class="metric-card__helper">Pre-session only</span>
+            </div>
+        </div>
+    <?php endif; ?>
 </div>
-
-<?php if ($canControl || $canManage): ?>
-    <div class="card shadow-sm mb-4">
-        <div class="card-header bg-white d-flex justify-content-between align-items-center">
-            <h2 class="h6 mb-0">Early arrival pending (door camera)</h2>
-            <span class="badge text-bg-secondary"><?= count($sessionPending) ?></span>
-        </div>
-        <div class="card-body py-2">
-            <p class="small text-muted mb-0">
-                Diagnostic only. Pending inside students are promoted to an official IN at scheduled start.
-                No face images or embeddings are stored here.
-            </p>
-        </div>
-        <div class="table-responsive">
-            <table class="table table-sm mb-0 align-middle">
-                <thead class="table-light">
-                    <tr>
-                        <th>Student</th>
-                        <th>Early entry</th>
-                        <th>Presence</th>
-                        <th>Last direction</th>
-                        <th>Status</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php if ($sessionPending === []): ?>
-                        <tr><td colspan="5" class="text-center text-muted py-3">No early-arrival pending rows.</td></tr>
-                    <?php else: ?>
-                        <?php foreach ($sessionPending as $pending): ?>
-                            <tr>
-                                <td><?= e($pending['registration_no'] . ' · ' . $pending['first_name'] . ' ' . $pending['last_name']) ?></td>
-                                <td><?= e($pending['early_entry_time'] ?: '—') ?></td>
-                                <td><?= (int) $pending['inside'] === 1 ? 'Inside' : 'Outside' ?></td>
-                                <td><?= e((string) $pending['last_direction']) ?></td>
-                                <td><span class="badge <?= e(status_badge_class((string) $pending['status'])) ?>"><?= e((string) $pending['status']) ?></span></td>
-                            </tr>
-                        <?php endforeach; ?>
-                    <?php endif; ?>
-                </tbody>
-            </table>
-        </div>
-    </div>
-<?php endif; ?>
 
 <?php if ($session['status'] === 'COMPLETED'): ?>
     <div class="card shadow-sm mb-4">
@@ -273,12 +286,16 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
         </div>
         <div class="card-body py-2">
             <p class="small text-muted mb-0">
-                One record per eligible student. Teaching time excludes the official break.
-                Manual early stop uses the actual end as the teaching end. Raw IN/OUT stays in Event audit.
+                One record per eligible student. Teaching minutes exclude the official break and are clipped to teaching time.
+                Last Out can be later than the session end (physical exit).
+            </p>
+            <p class="app-attendance-note">
+                Session-specific Final OUT: after completion, new IN events are closed for this session.
+                An existing student's final EXIT may still update Last Out.
             </p>
         </div>
         <div class="table-responsive">
-            <table class="table table-sm mb-0 align-middle">
+            <table class="table table-hover table-sm mb-0 align-middle">
                 <thead class="table-light">
                     <tr>
                         <th>Reg No</th>
@@ -295,7 +312,14 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
                 </thead>
                 <tbody>
                     <?php if ($finalRecords === []): ?>
-                        <tr><td colspan="10" class="text-center text-muted py-3">No final attendance yet. Use Recalculate / Finalize Attendance.</td></tr>
+                        <tr>
+                            <td colspan="10" class="p-0">
+                                <div class="app-empty-state">
+                                    <p class="app-empty-state__title mb-0">No final attendance yet.</p>
+                                    <p class="app-empty-state__message mb-0">Use Recalculate / Finalize Attendance.</p>
+                                </div>
+                            </td>
+                        </tr>
                     <?php else: ?>
                         <?php foreach ($finalRecords as $record): ?>
                             <tr>
@@ -328,7 +352,7 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
         </p>
     </div>
     <div class="table-responsive">
-        <table class="table table-sm mb-0 align-middle">
+        <table class="table table-hover table-sm mb-0 align-middle">
             <thead class="table-light">
                 <tr>
                     <th>Student</th>
@@ -342,7 +366,13 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
             </thead>
             <tbody>
                 <?php if ($attendancePreviews === []): ?>
-                    <tr><td colspan="7" class="text-center text-muted py-3">No eligible students.</td></tr>
+                    <tr>
+                        <td colspan="7" class="p-0">
+                            <div class="app-empty-state">
+                                <p class="app-empty-state__title mb-0">No eligible students.</p>
+                            </div>
+                        </td>
+                    </tr>
                 <?php else: ?>
                     <?php foreach ($attendancePreviews as $preview): ?>
                         <tr>
@@ -379,6 +409,97 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
 </div>
 <?php endif; ?>
 
+<div class="card shadow-sm mb-4 app-table-secondary" id="attendance-audit">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h2 class="h6 mb-0">Event audit (raw IN/OUT)</h2>
+        <span class="badge text-bg-secondary"><?= count($sessionEvents) ?></span>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-sm mb-0 align-middle">
+            <thead class="table-light">
+                <tr>
+                    <th>Time</th>
+                    <th>Student</th>
+                    <th>Event</th>
+                    <th>Camera</th>
+                    <th>Confidence</th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php if ($sessionEvents === []): ?>
+                    <tr>
+                        <td colspan="5" class="p-0">
+                            <div class="app-empty-state">
+                                <p class="app-empty-state__title mb-0">No IN/OUT events yet.</p>
+                                <p class="app-empty-state__message mb-0">Raw camera detections will appear here during the session.</p>
+                            </div>
+                        </td>
+                    </tr>
+                <?php else: ?>
+                    <?php foreach ($sessionEvents as $event): ?>
+                        <tr>
+                            <td><?= e((string) $event['recognized_at']) ?></td>
+                            <td><?= e($event['registration_no'] . ' · ' . $event['first_name'] . ' ' . $event['last_name']) ?></td>
+                            <td><span class="badge <?= e($event['event_type'] === 'IN' ? 'text-bg-success' : 'text-bg-secondary') ?>"><?= e($event['event_type']) ?></span></td>
+                            <td><?= e($event['camera_id'] ?: '-') ?></td>
+                            <td><?= e((string) $event['confidence']) ?></td>
+                        </tr>
+                    <?php endforeach; ?>
+                <?php endif; ?>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<?php if ($canControl || $canManage): ?>
+    <div class="card shadow-sm mb-4 app-table-secondary">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h2 class="h6 mb-0">Early arrival pending</h2>
+            <span class="badge text-bg-secondary"><?= count($sessionPending) ?></span>
+        </div>
+        <div class="card-body py-2">
+            <p class="small text-muted mb-0">
+                Pre-session / not final attendance. Students detected before the lecture starts.
+                Pending inside students are promoted to an official IN at scheduled start.
+            </p>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-sm mb-0 align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th>Student</th>
+                        <th>Early entry</th>
+                        <th>Presence</th>
+                        <th>Last direction</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php if ($sessionPending === []): ?>
+                        <tr>
+                            <td colspan="5" class="p-0">
+                                <div class="app-empty-state">
+                                    <p class="app-empty-state__title mb-0">No early-arrival pending rows.</p>
+                                </div>
+                            </td>
+                        </tr>
+                    <?php else: ?>
+                        <?php foreach ($sessionPending as $pending): ?>
+                            <tr>
+                                <td><?= e($pending['registration_no'] . ' · ' . $pending['first_name'] . ' ' . $pending['last_name']) ?></td>
+                                <td><?= e($pending['early_entry_time'] ?: '—') ?></td>
+                                <td><?= (int) $pending['inside'] === 1 ? 'Inside' : 'Outside' ?></td>
+                                <td><?= e((string) $pending['last_direction']) ?></td>
+                                <td><span class="badge <?= e(status_badge_class((string) $pending['status'])) ?>"><?= e((string) $pending['status']) ?></span></td>
+                            </tr>
+                        <?php endforeach; ?>
+                    <?php endif; ?>
+                </tbody>
+            </table>
+        </div>
+    </div>
+<?php endif; ?>
+
 <div class="card shadow-sm">
     <div class="card-header bg-white d-flex justify-content-between align-items-center">
         <h2 class="h6 mb-0">Eligible Students</h2>
@@ -402,7 +523,14 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
             </thead>
             <tbody>
                 <?php if ($eligibleStudents === []): ?>
-                    <tr><td colspan="4" class="text-center text-muted py-4">No eligible students. Enrol the batch in this module first.</td></tr>
+                    <tr>
+                        <td colspan="4" class="p-0">
+                            <div class="app-empty-state">
+                                <p class="app-empty-state__title mb-0">No eligible students.</p>
+                                <p class="app-empty-state__message mb-0">Enrol the batch in this module first.</p>
+                            </div>
+                        </td>
+                    </tr>
                 <?php else: ?>
                     <?php foreach ($eligibleStudents as $student): ?>
                         <tr>

@@ -125,8 +125,8 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
         <table class="table table-hover mb-0 align-middle">
             <thead class="table-light">
                 <tr>
+                    <th>Student</th>
                     <th>Registration No</th>
-                    <th>Full Name</th>
                     <th>Email</th>
                     <th>Course</th>
                     <th>Batch</th>
@@ -160,8 +160,13 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
                 <?php else: ?>
                     <?php foreach ($students as $student): ?>
                         <tr>
+                            <td>
+                                <div class="d-flex align-items-center gap-2">
+                                    <?= render_student_profile_avatar($student, 'sm') ?>
+                                    <span><?= e($student['first_name'] . ' ' . $student['last_name']) ?></span>
+                                </div>
+                            </td>
                             <td><?= e($student['registration_no']) ?></td>
-                            <td><?= e($student['first_name'] . ' ' . $student['last_name']) ?></td>
                             <td><?= app_truncate_html((string) $student['email'], 'md') ?></td>
                             <td><?= e($student['course_code']) ?></td>
                             <td><?= e($student['batch_name']) ?></td>

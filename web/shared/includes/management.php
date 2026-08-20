@@ -1050,7 +1050,7 @@ function set_user_status(int $userId, string $status): void
 function list_students(array $filters = []): array
 {
     $sql = "SELECT s.student_id, s.registration_no, s.first_name, s.last_name, s.phone,
-                   s.date_of_birth, s.gender, s.enrollment_date, s.status,
+                   s.date_of_birth, s.gender, s.enrollment_date, s.status, s.profile_photo,
                    u.user_id, u.username, u.email, u.status AS account_status,
                    c.course_id, c.course_code, c.course_name,
                    b.batch_id, b.batch_name,

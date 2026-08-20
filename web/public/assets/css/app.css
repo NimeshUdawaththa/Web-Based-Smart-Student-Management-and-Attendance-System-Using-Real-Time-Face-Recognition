@@ -875,6 +875,584 @@ form.app-filter-card > .card-body {
 }
 
 /* -----------------------------------------------------------------------------
+   Phase 4 — Student hub, face, camera, session, attendance
+   ----------------------------------------------------------------------------- */
+
+.app-student-identity {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 1rem 1.25rem;
+    padding: 1.15rem 1.25rem;
+    background: var(--ams-surface);
+    border: 1px solid var(--ams-border);
+    border-radius: var(--ams-radius-lg);
+    box-shadow: var(--ams-shadow);
+    margin-bottom: 1.25rem;
+}
+
+.app-student-identity__meta {
+    min-width: 0;
+    flex: 1 1 14rem;
+}
+
+.app-student-identity__name {
+    margin: 0;
+    font-size: 1.25rem;
+    font-weight: 700;
+    letter-spacing: -0.015em;
+}
+
+.app-student-identity__reg {
+    margin: 0.2rem 0 0;
+    color: var(--ams-text-muted);
+    font-size: 0.9375rem;
+}
+
+.app-student-identity__placement {
+    margin: 0.35rem 0 0;
+    color: var(--ams-text-muted);
+    font-size: 0.875rem;
+}
+
+.app-student-identity__badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    margin-top: 0.5rem;
+}
+
+.app-quick-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.app-workflow-steps {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    list-style: none;
+    padding: 0;
+    margin: 0 0 1rem;
+}
+
+.app-workflow-steps__item {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.35rem 0.75rem;
+    border-radius: var(--ams-radius-pill);
+    border: 1px solid var(--ams-border);
+    background: var(--ams-subtle);
+    color: var(--ams-text-muted);
+    font-size: 0.78rem;
+    font-weight: 650;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+}
+
+.app-workflow-steps__item.is-done {
+    background: var(--ams-success-soft);
+    border-color: rgba(25, 135, 84, 0.28);
+    color: #146c43;
+}
+
+.app-workflow-steps__item.is-current {
+    background: var(--ams-primary-soft);
+    border-color: rgba(var(--ams-primary-rgb), 0.35);
+    color: var(--ams-primary);
+}
+
+.app-workflow-steps__item.is-cancelled {
+    background: var(--ams-danger-soft);
+    border-color: rgba(220, 53, 69, 0.28);
+    color: #b02a37;
+}
+
+.app-workflow-steps__sep {
+    color: var(--ams-text-soft);
+    align-self: center;
+    font-size: 0.85rem;
+}
+
+.app-face-hero {
+    max-width: 860px;
+    margin: 0 auto 1.15rem;
+    text-align: center;
+}
+
+.app-face-hero__eyebrow {
+    margin: 0 0 0.2rem;
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--ams-text-muted);
+}
+
+.app-face-hero__title {
+    margin: 0 0 0.2rem;
+    font-size: 1.45rem;
+    font-weight: 700;
+    color: var(--ams-text);
+    line-height: 1.25;
+}
+
+.app-face-hero__meta {
+    margin: 0;
+    color: var(--ams-text-muted);
+    font-size: 0.95rem;
+}
+
+.app-face-hero__badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.55rem;
+    justify-content: center;
+    align-items: center;
+}
+
+.app-face-service {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem 0.55rem;
+}
+
+.app-face-service__label {
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--ams-text-muted);
+}
+
+.app-face-service--online {
+    padding: 0.2rem 0.15rem;
+}
+
+.app-face-service--offline,
+.app-face-service--warn {
+    width: 100%;
+    max-width: 860px;
+    margin: 0.65rem auto 0 !important;
+    text-align: left;
+}
+
+.app-face-card {
+    width: 100%;
+    max-width: 860px;
+    margin: 0 auto;
+    border: 1px solid var(--ams-border);
+    border-radius: var(--ams-radius-lg);
+    background: var(--ams-surface);
+    box-shadow: var(--ams-shadow);
+    padding: 1.15rem 1.2rem 1.25rem;
+}
+
+.app-face-help {
+    text-align: center;
+    font-size: 0.88rem;
+    margin: 0;
+}
+
+.app-face-privacy {
+    max-width: 860px;
+    margin: 0.85rem auto 1.25rem;
+    text-align: center;
+}
+
+.app-face-metrics {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.65rem;
+    margin-bottom: 0.65rem;
+}
+
+.app-face-metric {
+    border: 1px solid var(--ams-border);
+    border-radius: var(--ams-radius);
+    background: var(--ams-subtle);
+    padding: 0.55rem 0.75rem;
+    text-align: center;
+}
+
+.app-face-metric__label {
+    display: block;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--ams-text-muted);
+}
+
+.app-face-metric__value {
+    display: block;
+    margin-top: 0.15rem;
+    font-size: 0.98rem;
+    font-weight: 650;
+    color: var(--ams-text);
+    line-height: 1.25;
+}
+
+.app-face-steps {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.4rem;
+    margin-top: 1.1rem;
+    padding-top: 0.95rem;
+    border-top: 1px solid var(--ams-border);
+}
+
+.app-face-steps__item {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.28rem 0.65rem;
+    border-radius: var(--ams-radius-pill);
+    border: 1px solid var(--ams-border);
+    background: var(--ams-subtle);
+    color: var(--ams-text-soft);
+    font-size: 0.78rem;
+    font-weight: 575;
+}
+
+.app-face-steps__mark {
+    width: 0.45rem;
+    height: 0.45rem;
+    border-radius: 50%;
+    background: var(--ams-border);
+    flex: 0 0 auto;
+}
+
+.app-face-steps__item.is-done {
+    color: #146c43;
+    border-color: rgba(20, 108, 67, 0.25);
+    background: var(--ams-success-soft);
+}
+
+.app-face-steps__item.is-done .app-face-steps__mark {
+    background: #146c43;
+}
+
+.app-face-steps__item.is-done .app-face-steps__name::before {
+    content: "✓ ";
+    font-weight: 700;
+}
+
+.app-face-steps__item.is-current {
+    color: var(--ams-text);
+    border-color: rgba(var(--ams-primary-rgb), 0.35);
+    background: var(--ams-primary-soft);
+    font-weight: 650;
+}
+
+.app-face-steps__item.is-current .app-face-steps__mark {
+    background: var(--ams-primary);
+}
+
+.app-face-preview {
+    width: 100%;
+    margin: 0 auto 0.95rem;
+}
+
+.app-face-preview__frame {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    max-width: 860px;
+    margin: 0 auto;
+    min-height: 15rem;
+    aspect-ratio: 4 / 3;
+    border-radius: var(--ams-radius-lg);
+    border: 1px solid var(--ams-border);
+    background: linear-gradient(180deg, #eef2f6 0%, #e2e8f0 100%);
+    overflow: hidden;
+}
+
+.app-face-preview__frame.is-live {
+    background: #0b1220;
+}
+
+.app-face-preview__frame.is-completed {
+    background: var(--ams-success-soft);
+}
+
+.app-face-preview__video {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    object-position: center;
+    z-index: 0;
+}
+
+.app-face-preview__idle,
+.app-face-preview__completed {
+    position: relative;
+    z-index: 1;
+    max-width: 18rem;
+    padding: 0.85rem 1rem;
+    text-align: center;
+    color: var(--ams-text-muted);
+    font-size: 0.95rem;
+}
+
+.app-face-preview__completed {
+    color: #146c43;
+}
+
+.app-face-preview__oval {
+    position: absolute;
+    left: 50%;
+    top: 46%;
+    transform: translate(-50%, -50%);
+    width: 224px;
+    height: 288px;
+    border: 2px dashed rgba(255, 255, 255, 0.9);
+    border-radius: 50% / 45%;
+    box-shadow: 0 0 0 999px rgba(15, 23, 42, 0.28);
+    background: transparent;
+    pointer-events: none;
+    z-index: 2;
+}
+
+.app-face-preview__frame.is-idle .app-face-preview__oval {
+    border-color: rgba(13, 110, 253, 0.55);
+    box-shadow: 0 0 0 999px rgba(33, 37, 41, 0.1);
+}
+
+.app-face-preview__pose {
+    position: absolute;
+    left: 50%;
+    bottom: 1rem;
+    transform: translateX(-50%);
+    margin: 0;
+    color: #fff;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.55);
+    font-size: 0.92rem;
+    font-weight: 700;
+    text-align: center;
+    max-width: 92%;
+    z-index: 3;
+    pointer-events: none;
+}
+
+.app-face-preview__frame.is-idle .app-face-preview__pose,
+.app-face-preview__frame.is-completed .app-face-preview__pose {
+    color: var(--ams-primary);
+    text-shadow: none;
+}
+
+.app-face-capture__actions {
+    margin-top: 0.15rem;
+}
+
+.app-face-result {
+    max-width: 860px;
+    margin: 0 auto 1rem;
+}
+
+.app-face-result--success {
+    border: 1px solid rgba(20, 108, 67, 0.28);
+    border-radius: var(--ams-radius-lg);
+    background: var(--ams-success-soft);
+    padding: 1rem 1.15rem;
+}
+
+.app-face-result__title {
+    margin: 0 0 0.55rem;
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: #146c43;
+}
+
+.app-face-result__list {
+    margin: 0;
+    padding-left: 1.1rem;
+    color: var(--ams-text);
+}
+
+.app-face-result__list li {
+    margin-bottom: 0.2rem;
+}
+
+/* Legacy step/guide hooks kept for compatibility */
+.app-face-step {
+    border: 1px solid var(--ams-border);
+    border-radius: var(--ams-radius-lg);
+    background: var(--ams-surface);
+    padding: 1rem 1.15rem;
+    margin-bottom: 1rem;
+}
+
+.app-face-step__label {
+    display: block;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--ams-text-muted);
+    margin-bottom: 0.35rem;
+}
+
+.app-face-step__title {
+    margin: 0 0 0.5rem;
+    font-size: 1rem;
+    font-weight: 650;
+}
+
+@media (max-width: 991.98px) {
+    .app-face-card,
+    .app-face-hero,
+    .app-face-privacy,
+    .app-face-result,
+    .app-face-service--offline,
+    .app-face-service--warn {
+        max-width: 720px;
+    }
+
+    .app-face-preview__frame {
+        min-height: 14rem;
+    }
+
+    .app-face-preview__oval {
+        width: 190px;
+        height: 244px;
+    }
+}
+
+@media (max-width: 575.98px) {
+    .app-face-hero__title {
+        font-size: 1.25rem;
+    }
+
+    .app-face-card {
+        padding: 0.95rem 0.85rem 1.05rem;
+    }
+
+    .app-face-metrics {
+        grid-template-columns: 1fr;
+        gap: 0.5rem;
+    }
+
+    .app-face-preview__frame {
+        aspect-ratio: 3 / 4;
+        min-height: 17rem;
+    }
+
+    .app-face-preview__oval {
+        width: 156px;
+        height: 200px;
+    }
+
+    .app-face-preview__pose {
+        white-space: normal;
+        text-align: center;
+    }
+
+    .app-face-capture__actions .btn {
+        width: 100%;
+    }
+
+    .app-face-steps {
+        gap: 0.35rem;
+    }
+}
+
+.app-camera-hero {
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+    margin-bottom: 1.25rem;
+}
+
+.app-camera-stat {
+    background: var(--ams-surface);
+    border: 1px solid var(--ams-border);
+    border-radius: var(--ams-radius-lg);
+    box-shadow: var(--ams-shadow);
+    padding: 1rem 1.1rem;
+}
+
+.app-camera-stat__label {
+    display: block;
+    font-size: 0.75rem;
+    font-weight: 650;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--ams-text-muted);
+    margin-bottom: 0.35rem;
+}
+
+.app-camera-stat__value {
+    font-size: 1.15rem;
+    font-weight: 700;
+}
+
+.app-camera-mode-entry {
+    color: #146c43;
+}
+
+.app-camera-mode-exit {
+    color: #b02a37;
+}
+
+.app-diag-details {
+    margin-top: 1rem;
+}
+
+.app-diag-details > summary {
+    cursor: pointer;
+    color: var(--ams-text-muted);
+    font-size: 0.9rem;
+    font-weight: 575;
+}
+
+.app-session-summary-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+    gap: 0.75rem 1rem;
+}
+
+.app-session-summary-grid dt {
+    font-size: 0.72rem;
+    font-weight: 650;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--ams-text-muted);
+    margin: 0;
+}
+
+.app-session-summary-grid dd {
+    margin: 0.15rem 0 0;
+    font-weight: 575;
+}
+
+.app-attendance-note {
+    font-size: 0.875rem;
+    color: var(--ams-text-muted);
+    margin: 0.5rem 0 0;
+}
+
+.app-table-secondary {
+    opacity: 0.98;
+}
+
+.app-table-secondary .card-header {
+    background: var(--ams-subtle) !important;
+}
+
+.table td .profile-avatar--sm {
+    vertical-align: middle;
+}
+
+/* -----------------------------------------------------------------------------
    Calendar (Phase 5 territory — preserve status colours; light token reuse only)
    ----------------------------------------------------------------------------- */
 

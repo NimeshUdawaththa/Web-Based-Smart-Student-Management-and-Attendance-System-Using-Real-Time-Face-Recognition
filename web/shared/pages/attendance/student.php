@@ -82,34 +82,34 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
 <?php if ($student !== null): ?>
     <div class="row g-3 mb-4">
         <div class="col-6 col-lg-3">
-            <div class="card shadow-sm h-100"><div class="card-body">
-                <div class="text-muted small">Overall Attendance</div>
-                <div class="fs-4"><?= $summary['records'] > 0 ? e(number_format((float) $summary['average_percent'], 2)) . '%' : '—' ?></div>
-            </div></div>
+            <div class="metric-card">
+                <span class="metric-card__label">Overall Attendance</span>
+                <span class="metric-card__value"><?= $summary['records'] > 0 ? e(number_format((float) $summary['average_percent'], 2)) . '%' : '—' ?></span>
+            </div>
         </div>
         <div class="col-6 col-lg-3">
-            <div class="card shadow-sm h-100"><div class="card-body">
-                <div class="text-muted small">Present</div>
-                <div class="fs-4"><?= e((string) $summary['present']) ?></div>
-            </div></div>
+            <div class="metric-card">
+                <span class="metric-card__label">Present</span>
+                <span class="metric-card__value"><?= e((string) $summary['present']) ?></span>
+            </div>
         </div>
         <div class="col-6 col-lg-3">
-            <div class="card shadow-sm h-100"><div class="card-body">
-                <div class="text-muted small">Late</div>
-                <div class="fs-4"><?= e((string) $summary['late']) ?></div>
-            </div></div>
+            <div class="metric-card">
+                <span class="metric-card__label">Late</span>
+                <span class="metric-card__value"><?= e((string) $summary['late']) ?></span>
+            </div>
         </div>
         <div class="col-6 col-lg-3">
-            <div class="card shadow-sm h-100"><div class="card-body">
-                <div class="text-muted small">Absent</div>
-                <div class="fs-4"><?= e((string) $summary['absent']) ?></div>
-            </div></div>
+            <div class="metric-card">
+                <span class="metric-card__label">Absent</span>
+                <span class="metric-card__value"><?= e((string) $summary['absent']) ?></span>
+            </div>
         </div>
     </div>
 
     <div class="card shadow-sm">
         <div class="table-responsive">
-            <table class="table table-sm align-middle mb-0">
+            <table class="table table-hover align-middle mb-0">
                 <thead class="table-light">
                     <tr>
                         <th>Module</th>
@@ -123,7 +123,13 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
                 </thead>
                 <tbody>
                     <?php if ($records === []): ?>
-                        <tr><td colspan="7" class="text-center text-muted py-4">No finalized attendance yet.</td></tr>
+                        <tr>
+                            <td colspan="7" class="p-0">
+                                <div class="app-empty-state">
+                                    <p class="app-empty-state__title mb-0">No finalized attendance yet.</p>
+                                </div>
+                            </td>
+                        </tr>
                     <?php else: ?>
                         <?php foreach ($records as $record): ?>
                             <tr>

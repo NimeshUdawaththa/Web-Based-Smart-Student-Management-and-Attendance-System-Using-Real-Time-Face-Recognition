@@ -198,54 +198,55 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
     </div>
 <?php endif; ?>
 
-<div class="row g-3 mb-4">
+<div class="row g-3 mb-2">
     <div class="col-6 col-lg-2">
-        <div class="card shadow-sm h-100"><div class="card-body">
-            <div class="text-muted small"><?= $isLecturer ? 'Eligible Students' : 'Students' ?></div>
-            <div class="fs-4"><?= e((string) $summary['students']) ?></div>
-        </div></div>
+        <div class="metric-card">
+            <span class="metric-card__label">Unique Students</span>
+            <span class="metric-card__value"><?= e((string) $summary['students']) ?></span>
+        </div>
     </div>
     <?php if (!$isLecturer): ?>
         <div class="col-6 col-lg-2">
-            <div class="card shadow-sm h-100"><div class="card-body">
-                <div class="text-muted small">Sessions</div>
-                <div class="fs-4"><?= e((string) $summary['sessions']) ?></div>
-            </div></div>
+            <div class="metric-card">
+                <span class="metric-card__label">Sessions</span>
+                <span class="metric-card__value"><?= e((string) $summary['sessions']) ?></span>
+            </div>
         </div>
     <?php endif; ?>
     <div class="col-6 col-lg-2">
-        <div class="card shadow-sm h-100"><div class="card-body">
-            <div class="text-muted small">Present</div>
-            <div class="fs-4"><?= e((string) $summary['present']) ?></div>
-        </div></div>
+        <div class="metric-card">
+            <span class="metric-card__label">Present</span>
+            <span class="metric-card__value"><?= e((string) $summary['present']) ?></span>
+        </div>
     </div>
     <div class="col-6 col-lg-2">
-        <div class="card shadow-sm h-100"><div class="card-body">
-            <div class="text-muted small">Late</div>
-            <div class="fs-4"><?= e((string) $summary['late']) ?></div>
-        </div></div>
+        <div class="metric-card">
+            <span class="metric-card__label">Late</span>
+            <span class="metric-card__value"><?= e((string) $summary['late']) ?></span>
+        </div>
     </div>
     <div class="col-6 col-lg-2">
-        <div class="card shadow-sm h-100"><div class="card-body">
-            <div class="text-muted small">Absent</div>
-            <div class="fs-4"><?= e((string) $summary['absent']) ?></div>
-        </div></div>
+        <div class="metric-card">
+            <span class="metric-card__label">Absent</span>
+            <span class="metric-card__value"><?= e((string) $summary['absent']) ?></span>
+        </div>
     </div>
     <?php if ($isLecturer): ?>
         <div class="col-6 col-lg-2">
-            <div class="card shadow-sm h-100"><div class="card-body">
-                <div class="text-muted small">Left Early</div>
-                <div class="fs-4"><?= e((string) $summary['left_early']) ?></div>
-            </div></div>
+            <div class="metric-card">
+                <span class="metric-card__label">Left Early</span>
+                <span class="metric-card__value"><?= e((string) $summary['left_early']) ?></span>
+            </div>
         </div>
     <?php endif; ?>
     <div class="col-6 col-lg-2">
-        <div class="card shadow-sm h-100"><div class="card-body">
-            <div class="text-muted small">Average Attendance</div>
-            <div class="fs-4"><?= $summary['records'] > 0 ? e(number_format((float) $summary['average_percent'], 2)) . '%' : '—' ?></div>
-        </div></div>
+        <div class="metric-card">
+            <span class="metric-card__label">Average Attendance</span>
+            <span class="metric-card__value"><?= $summary['records'] > 0 ? e(number_format((float) $summary['average_percent'], 2)) . '%' : '—' ?></span>
+        </div>
     </div>
 </div>
+<p class="small text-muted mb-4">Present/Late/Absent count student-session records.</p>
 
 <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
     <p class="text-muted mb-0"><?= e((string) $summary['records']) ?> finalized record<?= $summary['records'] === 1 ? '' : 's' ?>.</p>

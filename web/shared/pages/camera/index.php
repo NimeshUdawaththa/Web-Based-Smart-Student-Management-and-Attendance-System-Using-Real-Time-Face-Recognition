@@ -47,16 +47,20 @@ $dash = static function (?string $value): string {
     return $text === '' ? '—' : $text;
 };
 
+$modeRaw = strtoupper(trim((string) ($status['mode'] ?? '')));
+$modeClass = match ($modeRaw) {
+    'ENTRY' => 'app-camera-mode-entry',
+    'EXIT' => 'app-camera-mode-exit',
+    default => '',
+};
+
 require INCLUDES_PATH . '/dashboard-layout-start.php';
 ?>
 
 <p class="text-muted mb-3">
-    One USB attendance camera. Start it when lectures need face recognition.
-    Attendance is still recorded only when an eligible lecture session is active.
+    Start the attendance camera when lectures need face recognition.
+    Students are only marked when an eligible lecture session is active.
 </p>
-<div class="alert alert-info">
-    Single-camera mode: press E in the recognition window to switch between ENTRY and EXIT.
-</div>
 
 <?php if (empty($status['can_start'])): ?>
     <div class="alert alert-warning">
@@ -65,34 +69,25 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
     </div>
 <?php endif; ?>
 
-<div class="card shadow-sm mb-4">
-    <div class="card-header bg-white d-flex justify-content-between align-items-center">
-        <h2 class="h5 mb-0">Attendance Camera</h2>
+<div class="app-camera-hero">
+    <div class="app-camera-stat">
+        <span class="app-camera-stat__label">Status</span>
         <span id="camera-status-badge" class="badge <?= e(camera_status_badge_class((string) $status['status'])) ?>"><?= e((string) $status['status']) ?></span>
     </div>
-    <div class="card-body">
-        <dl class="row mb-0" id="camera-status-fields">
-            <dt class="col-sm-4">Camera</dt>
-            <dd class="col-sm-8" id="camera-label"><?= e((string) $status['camera']) ?></dd>
-            <dt class="col-sm-4">Configured Index</dt>
-            <dd class="col-sm-8" id="camera-index"><?= e((string) $status['camera_index']) ?></dd>
-            <dt class="col-sm-4">Mode</dt>
-            <dd class="col-sm-8" id="camera-mode"><?= e((string) $status['mode']) ?></dd>
-            <dt class="col-sm-4">Process PID</dt>
-            <dd class="col-sm-8" id="camera-pid"><?= e($dash(isset($status['pid']) ? (string) $status['pid'] : null)) ?></dd>
-            <dt class="col-sm-4">Last Started</dt>
-            <dd class="col-sm-8" id="camera-started"><?= e($dash(isset($status['last_started']) ? (string) $status['last_started'] : null)) ?></dd>
-            <dt class="col-sm-4">Last Stopped</dt>
-            <dd class="col-sm-8" id="camera-stopped"><?= e($dash(isset($status['last_stopped']) ? (string) $status['last_stopped'] : null)) ?></dd>
-            <dt class="col-sm-4">Last Error</dt>
-            <dd class="col-sm-8" id="camera-error"><?= e($dash(isset($status['last_error']) ? (string) $status['last_error'] : null)) ?></dd>
-        </dl>
+    <div class="app-camera-stat">
+        <span class="app-camera-stat__label">Source</span>
+        <span class="app-camera-stat__value" id="camera-label"><?= e((string) $status['camera']) ?></span>
+    </div>
+    <div class="app-camera-stat">
+        <span class="app-camera-stat__label">Mode</span>
+        <span class="app-camera-stat__value <?= e($modeClass) ?>" id="camera-mode"><?= e((string) $status['mode']) ?></span>
+        <p class="small text-muted mb-0 mt-2">ENTRY = student enters session · EXIT = student leaves session</p>
     </div>
 </div>
 
-<div class="card shadow-sm">
+<div class="card shadow-sm mb-4">
     <div class="card-body">
-        <h3 class="h6">Camera process</h3>
+        <h2 class="h6">Camera controls</h2>
         <div class="d-flex flex-wrap gap-2">
             <form method="post" class="d-inline">
                 <?= csrf_field() ?>
@@ -107,6 +102,27 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
         </div>
     </div>
 </div>
+
+<div class="alert alert-info">
+    Press <strong>E</strong> in the recognition window to switch between ENTRY and EXIT.
+    The camera does not switch modes automatically.
+</div>
+
+<details class="app-diag-details">
+    <summary>Technical details</summary>
+    <dl class="row mb-0 mt-3" id="camera-status-fields">
+        <dt class="col-sm-4">Configured Index</dt>
+        <dd class="col-sm-8" id="camera-index"><?= e((string) $status['camera_index']) ?></dd>
+        <dt class="col-sm-4">Process PID</dt>
+        <dd class="col-sm-8" id="camera-pid"><?= e($dash(isset($status['pid']) ? (string) $status['pid'] : null)) ?></dd>
+        <dt class="col-sm-4">Last Started</dt>
+        <dd class="col-sm-8" id="camera-started"><?= e($dash(isset($status['last_started']) ? (string) $status['last_started'] : null)) ?></dd>
+        <dt class="col-sm-4">Last Stopped</dt>
+        <dd class="col-sm-8" id="camera-stopped"><?= e($dash(isset($status['last_stopped']) ? (string) $status['last_stopped'] : null)) ?></dd>
+        <dt class="col-sm-4">Last Error</dt>
+        <dd class="col-sm-8" id="camera-error"><?= e($dash(isset($status['last_error']) ? (string) $status['last_error'] : null)) ?></dd>
+    </dl>
+</details>
 
 <script>
 (function () {
@@ -134,6 +150,15 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
         }
         return String(value);
     };
+    const applyModeClass = (el, mode) => {
+        el.classList.remove('app-camera-mode-entry', 'app-camera-mode-exit');
+        const normalized = String(mode || '').trim().toUpperCase();
+        if (normalized === 'ENTRY') {
+            el.classList.add('app-camera-mode-entry');
+        } else if (normalized === 'EXIT') {
+            el.classList.add('app-camera-mode-exit');
+        }
+    };
 
     async function refresh() {
         try {
@@ -148,6 +173,7 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
             fields.camera.textContent = dash(data.camera);
             fields.index.textContent = dash(data.camera_index);
             fields.mode.textContent = dash(data.mode);
+            applyModeClass(fields.mode, data.mode);
             fields.pid.textContent = dash(data.pid);
             fields.started.textContent = dash(data.last_started);
             fields.stopped.textContent = dash(data.last_stopped);
