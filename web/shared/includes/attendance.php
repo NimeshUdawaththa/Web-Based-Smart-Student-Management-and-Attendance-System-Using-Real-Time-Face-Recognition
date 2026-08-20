@@ -677,6 +677,32 @@ function record_face_attendance_event(
 ): array {
     $camera = normalize_camera_id($cameraId);
     $mode = normalize_camera_mode($cameraMode, $camera);
+
+    $student = get_student($studentId);
+    if ($student === null) {
+        return [
+            'result' => 'INVALID_STUDENT',
+            'student_id' => $studentId,
+            'camera_mode' => $mode,
+            'camera_id' => $camera,
+        ];
+    }
+    if ((string) ($student['status'] ?? '') !== 'ACTIVE') {
+        error_log(
+            'Attendance recognition student_id=' . $studentId
+            . ' camera_mode=' . $mode
+            . ' resolved_session=none'
+            . ' result=STUDENT_INACTIVE'
+        );
+
+        return [
+            'result' => 'STUDENT_INACTIVE',
+            'student_id' => $studentId,
+            'camera_mode' => $mode,
+            'camera_id' => $camera,
+        ];
+    }
+
     $resolution = resolve_attendance_session_for_student($studentId, $mode);
     if (($resolution['result'] ?? '') !== 'ELIGIBLE') {
         $public = public_attendance_result($resolution);

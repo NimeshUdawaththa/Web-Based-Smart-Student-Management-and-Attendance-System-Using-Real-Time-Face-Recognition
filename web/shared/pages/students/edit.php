@@ -47,6 +47,27 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
         redirect($studentRoutePrefix . '/edit.php?id=' . $studentId);
     }
 
+    $lifecycleAction = (string) ($_POST['lifecycle_action'] ?? '');
+    if ($lifecycleAction === 'deactivate' || $lifecycleAction === 'reactivate') {
+        try {
+            if ($lifecycleAction === 'deactivate') {
+                deactivate_student($studentId);
+                set_flash('success', 'Student deactivated. Login and new attendance are disabled. Historical records were preserved.');
+            } else {
+                reactivate_student($studentId);
+                set_flash('success', 'Student reactivated. Login and face attendance are enabled again.');
+            }
+            redirect($studentRoutePrefix . '/edit.php?id=' . $studentId);
+        } catch (InvalidArgumentException $exception) {
+            set_flash('error', $exception->getMessage());
+            redirect($studentRoutePrefix . '/edit.php?id=' . $studentId);
+        } catch (Throwable $exception) {
+            error_log('Student lifecycle action failed: ' . $exception->getMessage());
+            set_flash('error', 'Unable to update student status. Please try again.');
+            redirect($studentRoutePrefix . '/edit.php?id=' . $studentId);
+        }
+    }
+
     foreach (array_keys($form) as $key) {
         $form[$key] = trim((string) ($_POST[$key] ?? ''));
     }
@@ -114,15 +135,24 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
     }
 }
 
+$dbStudent = get_student($studentId);
+if ($dbStudent === null) {
+    set_flash('error', 'Student not found.');
+    redirect($studentRoutePrefix . '/index.php');
+}
+
 $selectedCourseId = positive_int($form['course_id']);
-$includeCurrentBatch = $selectedCourseId === (int) $student['course_id'] ? (int) $student['batch_id'] : null;
+$includeCurrentBatch = $selectedCourseId === (int) $dbStudent['course_id'] ? (int) $dbStudent['batch_id'] : null;
 $batches = $selectedCourseId !== null ? batches_for_selection($selectedCourseId, $includeCurrentBatch) : [];
 $batchOptions = [];
 
 foreach ($courses as $course) {
-    $includeBatch = ((int) $course['course_id'] === (int) $student['course_id']) ? (int) $student['batch_id'] : null;
+    $includeBatch = ((int) $course['course_id'] === (int) $dbStudent['course_id']) ? (int) $dbStudent['batch_id'] : null;
     $batchOptions[(string) $course['course_id']] = batches_for_selection((int) $course['course_id'], $includeBatch);
 }
+
+$isStudentActive = (string) $dbStudent['status'] === 'ACTIVE';
+$isStudentInactive = (string) $dbStudent['status'] === 'INACTIVE';
 
 require INCLUDES_PATH . '/dashboard-layout-start.php';
 ?>
@@ -132,12 +162,46 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
 </div>
 
 <div class="d-flex align-items-center gap-3 mb-4">
-    <?= render_student_profile_avatar($student, 'md') ?>
+    <?= render_student_profile_avatar($dbStudent, 'md') ?>
     <div>
-        <div class="fw-semibold"><?= e($student['first_name'] . ' ' . $student['last_name']) ?></div>
-        <div class="small text-muted"><?= e((string) $student['registration_no']) ?></div>
+        <div class="fw-semibold"><?= e($dbStudent['first_name'] . ' ' . $dbStudent['last_name']) ?></div>
+        <div class="small text-muted"><?= e((string) $dbStudent['registration_no']) ?></div>
+        <div class="mt-1">
+            <span class="badge <?= e(status_badge_class((string) $dbStudent['status'])) ?>"><?= e((string) $dbStudent['status']) ?></span>
+            <span class="badge <?= e(status_badge_class((string) $dbStudent['account_status'])) ?>">Account: <?= e((string) $dbStudent['account_status']) ?></span>
+        </div>
     </div>
 </div>
+
+<?php if ($isStudentActive || $isStudentInactive): ?>
+    <div class="card shadow-sm mb-4 border-<?= $isStudentActive ? 'warning' : 'success' ?>">
+        <div class="card-body d-flex flex-wrap justify-content-between align-items-center gap-3">
+            <div>
+                <h2 class="h6 mb-1"><?= $isStudentActive ? 'Deactivate Student' : 'Reactivate Student' ?></h2>
+                <p class="text-muted mb-0 small">
+                    <?php if ($isStudentActive): ?>
+                        Login and new attendance will be disabled. Historical academic records, face enrollment, and profile photo are preserved.
+                    <?php else: ?>
+                        Restores login and face attendance eligibility. Existing face enrollment and historical records are kept.
+                    <?php endif; ?>
+                </p>
+            </div>
+            <form method="post" class="mb-0"
+                  onsubmit="return confirm(<?= e(json_encode(
+                      $isStudentActive
+                          ? 'Deactivate this student? Login and new attendance will be disabled. Historical academic records will be preserved.'
+                          : 'Reactivate this student? Login and face attendance will be enabled again.'
+                  )) ?>);">
+                <?= csrf_field() ?>
+                <input type="hidden" name="student_id" value="<?= e((string) $studentId) ?>">
+                <input type="hidden" name="lifecycle_action" value="<?= $isStudentActive ? 'deactivate' : 'reactivate' ?>">
+                <button type="submit" class="btn btn-<?= $isStudentActive ? 'warning' : 'success' ?>">
+                    <?= $isStudentActive ? 'Deactivate Student' : 'Reactivate Student' ?>
+                </button>
+            </form>
+        </div>
+    </div>
+<?php endif; ?>
 
 <?php if ($errors !== []): ?>
     <div class="alert alert-danger">
@@ -155,14 +219,15 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
         <input type="hidden" name="student_id" value="<?= e((string) $studentId) ?>">
 
         <div class="alert alert-info">
-            Face status: <strong><?= e($student['face_status']) ?></strong>.
+            Face status: <strong><?= e($dbStudent['face_status']) ?></strong>.
             Username remains unchanged for this account.
+            Prefer <strong>Deactivate / Reactivate</strong> above for account lifecycle; status fields here remain available for other cases (e.g. GRADUATED).
         </div>
 
         <div class="row g-3 mb-4">
             <div class="col-md-4">
                 <label class="form-label">Username</label>
-                <input type="text" class="form-control" value="<?= e($student['username']) ?>" disabled>
+                <input type="text" class="form-control" value="<?= e($dbStudent['username']) ?>" disabled>
             </div>
             <div class="col-md-4">
                 <label for="email" class="form-label">Email</label>

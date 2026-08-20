@@ -1380,6 +1380,7 @@ function lecturer_can_view_student(int $lecturerId, int $studentId): bool
          INNER JOIN module_lecturers ml
            ON ml.module_id = sm.module_id
           AND ml.lecturer_id = :lecturer_id
+         INNER JOIN students s ON s.student_id = sm.student_id AND s.status = 'ACTIVE'
          WHERE sm.student_id = :student_id
            AND sm.status = 'ENROLLED'
          LIMIT 1"
@@ -1495,6 +1496,9 @@ function list_students_for_lecturer(int $lecturerId, array $filters = []): array
     if (!empty($filters['status']) && in_array($filters['status'], student_statuses(), true)) {
         $sql .= ' AND s.status = :status';
         $params['status'] = $filters['status'];
+    } else {
+        // Directory defaults to ACTIVE students only (inactive remain in Admin/Staff lists).
+        $sql .= " AND s.status = 'ACTIVE'";
     }
 
     $sql .= ' GROUP BY s.student_id, s.registration_no, s.first_name, s.last_name, s.phone,

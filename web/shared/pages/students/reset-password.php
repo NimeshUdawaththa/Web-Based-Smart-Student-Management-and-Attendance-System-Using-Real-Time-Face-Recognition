@@ -87,6 +87,13 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
     </div>
 </div>
 
+<?php if ((string) $student['status'] === 'INACTIVE' || (string) $student['account_status'] !== 'ACTIVE'): ?>
+    <div class="alert alert-info mb-4">
+        Resetting the password does <strong>not</strong> reactivate this student.
+        An inactive student still cannot sign in until explicitly reactivated.
+    </div>
+<?php endif; ?>
+
 <div class="card shadow-sm">
     <div class="card-header bg-white">
         <h2 class="h6 mb-0">Set new password</h2>

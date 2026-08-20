@@ -1190,6 +1190,75 @@ function update_student(int $studentId, array $data): void
 }
 
 /**
+ * Soft-deactivate a student: preserve all history; block login and new attendance.
+ * Sets students.status and linked users.status to INACTIVE.
+ * Does not delete face profiles, enrolments, attendance, marks, or photos.
+ */
+function deactivate_student(int $studentId): void
+{
+    $student = get_student($studentId);
+    if ($student === null) {
+        throw new InvalidArgumentException('Student not found.');
+    }
+    if ((string) $student['status'] === 'INACTIVE') {
+        throw new InvalidArgumentException('Student is already inactive.');
+    }
+    if ((string) $student['status'] !== 'ACTIVE') {
+        throw new InvalidArgumentException('Only ACTIVE students can be deactivated from this action.');
+    }
+
+    $userId = (int) $student['user_id'];
+    $pdo = db();
+    $pdo->beginTransaction();
+    try {
+        $pdo->prepare(
+            "UPDATE students SET status = 'INACTIVE' WHERE student_id = :student_id"
+        )->execute(['student_id' => $studentId]);
+        $pdo->prepare(
+            "UPDATE users SET status = 'INACTIVE' WHERE user_id = :user_id AND role = 'STUDENT'"
+        )->execute(['user_id' => $userId]);
+        $pdo->commit();
+    } catch (Throwable $exception) {
+        $pdo->rollBack();
+        throw $exception;
+    }
+}
+
+/**
+ * Reactivate an INACTIVE student and linked STUDENT login account.
+ * Does not alter attendance, marks, submissions, enrolments, or face data.
+ */
+function reactivate_student(int $studentId): void
+{
+    $student = get_student($studentId);
+    if ($student === null) {
+        throw new InvalidArgumentException('Student not found.');
+    }
+    if ((string) $student['status'] === 'ACTIVE') {
+        throw new InvalidArgumentException('Student is already active.');
+    }
+    if ((string) $student['status'] !== 'INACTIVE') {
+        throw new InvalidArgumentException('Only INACTIVE students can be reactivated from this action.');
+    }
+
+    $userId = (int) $student['user_id'];
+    $pdo = db();
+    $pdo->beginTransaction();
+    try {
+        $pdo->prepare(
+            "UPDATE students SET status = 'ACTIVE' WHERE student_id = :student_id"
+        )->execute(['student_id' => $studentId]);
+        $pdo->prepare(
+            "UPDATE users SET status = 'ACTIVE' WHERE user_id = :user_id AND role = 'STUDENT'"
+        )->execute(['user_id' => $userId]);
+        $pdo->commit();
+    } catch (Throwable $exception) {
+        $pdo->rollBack();
+        throw $exception;
+    }
+}
+
+/**
  * @param array{search?: string, status?: string} $filters
  * @return list<array<string, mixed>>
  */

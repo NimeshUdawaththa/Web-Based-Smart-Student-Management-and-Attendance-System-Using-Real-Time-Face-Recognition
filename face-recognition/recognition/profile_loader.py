@@ -1,7 +1,7 @@
 """
 Load enrolled face embeddings for recognition.
 
-Only ACTIVE face_profiles are considered. Encoding files must live under
+Only ACTIVE face_profiles for ACTIVE students are considered. Encoding files must live under
 the configured encodings directory. Corrupt or missing files are skipped
 so the rest of the gallery can still be used.
 """

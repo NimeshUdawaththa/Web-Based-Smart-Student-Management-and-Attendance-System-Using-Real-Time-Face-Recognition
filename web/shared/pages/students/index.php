@@ -19,7 +19,7 @@ $search = trim((string) ($_GET['search'] ?? ''));
 $courseId = positive_int($_GET['course_id'] ?? null);
 $batchId = positive_int($_GET['batch_id'] ?? null);
 $moduleId = positive_int($_GET['module_id'] ?? null);
-$status = (string) ($_GET['status'] ?? '');
+$status = (string) ($_GET['status'] ?? ($isLecturerDirectory ? 'ACTIVE' : ''));
 
 $filters = array_filter([
     'search' => $search,
@@ -100,10 +100,14 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
             <div class="col-md-2">
                 <label for="status" class="form-label">Status</label>
                 <select class="form-select" id="status" name="status">
-                    <option value="">All statuses</option>
-                    <?php foreach (student_statuses() as $studentStatus): ?>
-                        <option value="<?= e($studentStatus) ?>" <?= $status === $studentStatus ? 'selected' : '' ?>><?= e($studentStatus) ?></option>
-                    <?php endforeach; ?>
+                    <?php if ($isLecturerDirectory): ?>
+                        <option value="ACTIVE" <?= $status === 'ACTIVE' || $status === '' ? 'selected' : '' ?>>Active</option>
+                    <?php else: ?>
+                        <option value="">All statuses</option>
+                        <?php foreach (student_statuses() as $studentStatus): ?>
+                            <option value="<?= e($studentStatus) ?>" <?= $status === $studentStatus ? 'selected' : '' ?>><?= e($studentStatus) ?></option>
+                        <?php endforeach; ?>
+                    <?php endif; ?>
                 </select>
             </div>
             <div class="col-md-<?= $isLecturerDirectory ? '12' : '3' ?> d-flex align-items-end gap-2">

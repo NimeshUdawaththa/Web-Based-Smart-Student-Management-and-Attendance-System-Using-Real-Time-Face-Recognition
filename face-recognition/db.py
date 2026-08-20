@@ -37,8 +37,9 @@ def get_student_by_id(student_id: int) -> dict | None:
 
 def list_active_face_profiles() -> list[dict]:
     """
-    Return ACTIVE face profiles joined with authoritative student identity.
-    Encoding files are not loaded here.
+    Return ACTIVE face profiles for ACTIVE students, with student identity.
+    Encoding files are not loaded here. Inactive students are excluded so they
+    are not matched for live attendance recognition.
     """
     conn = get_connection()
     try:
@@ -50,6 +51,7 @@ def list_active_face_profiles() -> list[dict]:
             "FROM face_profiles fp "
             "INNER JOIN students s ON s.student_id = fp.student_id "
             "WHERE fp.status = 'ACTIVE' "
+            "AND s.status = 'ACTIVE' "
             "ORDER BY fp.student_id ASC"
         )
         return list(cursor.fetchall())
