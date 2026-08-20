@@ -47,10 +47,10 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
 ?>
 
 <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
-    <p class="text-muted mb-0">Statuses update from the timetable when this page is opened. Start, Stop, and Cancel remain available as manual overrides.</p>
+    <p class="text-muted mb-0">Statuses update when this page is opened. Start, Stop, and Cancel remain available as manual overrides.</p>
     <?php if ($canManage): ?>
         <div class="d-flex gap-2">
-            <a href="<?= e(app_url($academicRoutePrefix . '/sessions/generate.php')) ?>" class="btn btn-outline-primary">Generate This Week</a>
+            <a href="<?= e(app_url($academicRoutePrefix . '/calendar/index.php')) ?>" class="btn btn-outline-primary">Lecture Calendar</a>
             <a href="<?= e(app_url($academicRoutePrefix . '/sessions/create.php')) ?>" class="btn btn-primary">Create Session</a>
         </div>
     <?php endif; ?>

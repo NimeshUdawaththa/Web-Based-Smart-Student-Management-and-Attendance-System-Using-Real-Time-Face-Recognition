@@ -52,7 +52,8 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
             'late_after_minutes' => (int) $form['late_after_minutes'],
         ]);
         set_flash('success', 'Lecture session created.');
-        redirect($academicRoutePrefix . '/sessions/index.php');
+        $calendarDate = validate_date_ymd($form['session_date']) ? $form['session_date'] : app_today();
+        redirect($academicRoutePrefix . '/calendar/index.php?view=today&date=' . rawurlencode($calendarDate));
     } catch (InvalidArgumentException $exception) {
         $errors[] = $exception->getMessage();
     }
@@ -74,8 +75,9 @@ foreach ($modules as $module) {
 require INCLUDES_PATH . '/dashboard-layout-start.php';
 ?>
 
-<div class="mb-3">
-    <a href="<?= e(app_url($academicRoutePrefix . '/sessions/index.php')) ?>" class="btn btn-outline-secondary btn-sm">&larr; Back to Sessions</a>
+<div class="mb-3 d-flex gap-2 flex-wrap">
+    <a href="<?= e(app_url($academicRoutePrefix . '/calendar/index.php')) ?>" class="btn btn-outline-secondary btn-sm">&larr; Lecture Calendar</a>
+    <a href="<?= e(app_url($academicRoutePrefix . '/sessions/index.php')) ?>" class="btn btn-outline-secondary btn-sm">Lecture Sessions</a>
 </div>
 
 <?php if ($errors !== []): ?>

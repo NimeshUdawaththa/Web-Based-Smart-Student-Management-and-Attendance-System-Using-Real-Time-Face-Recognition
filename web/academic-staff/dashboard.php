@@ -22,9 +22,18 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
     <div class="col-md-6 col-lg-4">
         <div class="card shadow-sm h-100">
             <div class="card-body">
-                <h2 class="h5">Timetable</h2>
-                <p class="text-muted">Create and maintain recurring lecture slots.</p>
-                <a href="<?= e(app_url('academic-staff/schedules/index.php')) ?>" class="btn btn-primary btn-sm">Open</a>
+                <h2 class="h5">Lecture Calendar</h2>
+                <p class="text-muted">View dated lecture sessions across lecturers.</p>
+                <a href="<?= e(app_url('academic-staff/calendar/index.php')) ?>" class="btn btn-primary btn-sm">Open</a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6 col-lg-4">
+        <div class="card shadow-sm h-100">
+            <div class="card-body">
+                <h2 class="h5">Create Session</h2>
+                <p class="text-muted">Schedule a dated lecture session for a lecturer.</p>
+                <a href="<?= e(app_url('academic-staff/sessions/create.php')) ?>" class="btn btn-primary btn-sm">Create</a>
             </div>
         </div>
     </div>
@@ -60,7 +69,7 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
             <div class="card-body">
                 <h2 class="h5">Today's Sessions</h2>
                 <p class="text-muted mb-2"><?= count($todaySessions) ?> session<?= count($todaySessions) === 1 ? '' : 's' ?> today.</p>
-                <a href="<?= e(app_url('academic-staff/sessions/index.php?view=today')) ?>" class="btn btn-outline-primary btn-sm">View today</a>
+                <a href="<?= e(app_url('academic-staff/calendar/index.php?view=today')) ?>" class="btn btn-outline-primary btn-sm">View today</a>
             </div>
         </div>
     </div>
@@ -72,7 +81,7 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
                 <?php if ($activeSessions !== []): ?>
                     <p class="small text-success mb-2"><?= count($activeSessions) ?> currently in progress.</p>
                 <?php endif; ?>
-                <a href="<?= e(app_url('academic-staff/sessions/index.php?view=upcoming')) ?>" class="btn btn-outline-primary btn-sm">View upcoming</a>
+                <a href="<?= e(app_url('academic-staff/calendar/index.php?view=week')) ?>" class="btn btn-outline-primary btn-sm">View calendar</a>
             </div>
         </div>
     </div>

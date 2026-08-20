@@ -14,7 +14,7 @@ $readOnly = $readOnly ?? false;
 /** @var int|null $restrictLecturerId */
 $restrictLecturerId = $restrictLecturerId ?? null;
 
-$pageTitle = $readOnly ? 'My Timetable' : 'Timetable';
+$pageTitle = $readOnly ? 'My Timetable' : 'Timetable Management';
 $moduleId = positive_int($_GET['module_id'] ?? null);
 $batchId = positive_int($_GET['batch_id'] ?? null);
 $day = (string) ($_GET['day_of_week'] ?? '');

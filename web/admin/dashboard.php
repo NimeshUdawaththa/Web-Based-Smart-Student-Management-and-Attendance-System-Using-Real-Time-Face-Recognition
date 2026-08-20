@@ -72,9 +72,18 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
     <div class="col-md-6 col-lg-4">
         <div class="card shadow-sm h-100">
             <div class="card-body">
-                <h2 class="h5">Timetable</h2>
-                <p class="text-muted">System-wide lecture timetable.</p>
-                <a href="<?= e(app_url('admin/schedules/index.php')) ?>" class="btn btn-primary btn-sm">Open</a>
+                <h2 class="h5">Lecture Calendar</h2>
+                <p class="text-muted">View dated lecture sessions across lecturers.</p>
+                <a href="<?= e(app_url('admin/calendar/index.php')) ?>" class="btn btn-primary btn-sm">Open</a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6 col-lg-4">
+        <div class="card shadow-sm h-100">
+            <div class="card-body">
+                <h2 class="h5">Create Session</h2>
+                <p class="text-muted">Schedule a dated lecture session for a lecturer.</p>
+                <a href="<?= e(app_url('admin/sessions/create.php')) ?>" class="btn btn-primary btn-sm">Create</a>
             </div>
         </div>
     </div>

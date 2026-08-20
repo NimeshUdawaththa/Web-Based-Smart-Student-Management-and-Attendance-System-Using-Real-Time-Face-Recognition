@@ -2493,6 +2493,12 @@ function list_lecture_sessions(array $filters = []): array
         $params['module_id'] = $filters['module_id'];
     }
 
+    if (!empty($filters['course_id'])) {
+        // Course scope via batch → course (Module Catalogue / course_modules), not modules.course_id.
+        $sql .= ' AND b.course_id = :course_id';
+        $params['course_id'] = (int) $filters['course_id'];
+    }
+
     if (!empty($filters['upcoming'])) {
         $sql .= " AND ls.session_date >= :today AND ls.status IN ('SCHEDULED', 'IN_PROGRESS')";
         $params['today'] = app_today();
