@@ -29,6 +29,10 @@ function left_early_tolerance_minutes(): int
     return max(0, (int) (env('LEFT_EARLY_TOLERANCE_MINUTES', '5') ?? '5'));
 }
 
+/**
+ * Legacy env helper. Recognition no longer rejects outstanding final OUT by this window.
+ * Kept so existing .env keys remain harmless; unused by the session-specific EXIT path.
+ */
 function post_session_exit_capture_minutes(): int
 {
     return max(0, (int) (env('POST_SESSION_EXIT_CAPTURE_MINUTES', '10') ?? '10'));
@@ -370,13 +374,125 @@ function list_session_attendance_events(int $sessionId, int $limit = 200): array
 }
 
 /**
+ * Latest official attendance event for a student within one session.
+ *
+ * @return array<string, mixed>|null
+ */
+function last_attendance_event_for_student_session(int $studentId, int $sessionId): ?array
+{
+    $statement = db()->prepare(
+        "SELECT event_id, student_id, session_id, event_type, recognized_at, confidence, camera_id
+         FROM attendance_events
+         WHERE student_id = :student_id AND session_id = :session_id
+         ORDER BY recognized_at DESC, event_id DESC
+         LIMIT 1"
+    );
+    $statement->execute([
+        'student_id' => $studentId,
+        'session_id' => $sessionId,
+    ]);
+    $row = $statement->fetch();
+
+    return $row === false ? null : $row;
+}
+
+/**
+ * Sessions where this student's last official event is IN (still logically inside).
+ * Scoped to today's IN_PROGRESS / COMPLETED sessions the student is eligible for.
+ * Ordered most-recent last-IN first (recognized_at DESC, event_id DESC).
+ *
+ * @return list<array{session: array<string, mixed>, last_in_at: string, last_event_id: int}>
+ */
+function list_outstanding_inside_sessions_for_student(int $studentId): array
+{
+    return list_sessions_by_last_event_type_for_student($studentId, 'IN', true);
+}
+
+/**
+ * Completed sessions where this student's last official event is OUT (already checked out).
+ * Used so repeated EXIT can resolve to ALREADY_OUTSIDE instead of a silent NO_ACTIVE_SESSION.
+ * Ordered most-recent last-OUT first.
+ *
+ * @return list<array{session: array<string, mixed>, last_in_at: string, last_event_id: int}>
+ */
+function list_completed_already_outside_sessions_for_student(int $studentId): array
+{
+    return list_sessions_by_last_event_type_for_student($studentId, 'OUT', false);
+}
+
+/**
+ * @return list<array{session: array<string, mixed>, last_in_at: string, last_event_id: int}>
+ */
+function list_sessions_by_last_event_type_for_student(
+    int $studentId,
+    string $lastEventType,
+    bool $includeInProgress
+): array {
+    $now = app_now();
+    $today = $now->format('Y-m-d');
+    $found = [];
+    $wanted = strtoupper($lastEventType);
+
+    foreach (list_lecture_sessions(['from' => $today, 'to' => $today]) as $session) {
+        $status = (string) ($session['status'] ?? '');
+        if ($status === 'COMPLETED') {
+            // ok
+        } elseif ($includeInProgress && $status === 'IN_PROGRESS') {
+            // ok for outstanding IN only
+        } else {
+            continue;
+        }
+
+        $sessionId = (int) $session['session_id'];
+        $allowCompleted = $status === 'COMPLETED';
+        if (!is_student_eligible_for_session($studentId, $sessionId, $allowCompleted)) {
+            continue;
+        }
+
+        if ($status === 'COMPLETED') {
+            $effectiveEnd = session_effective_teaching_end($session);
+            if (!$effectiveEnd instanceof DateTimeImmutable || $now < $effectiveEnd) {
+                continue;
+            }
+        }
+
+        $last = last_attendance_event_for_student_session($studentId, $sessionId);
+        if ($last === null || (string) ($last['event_type'] ?? '') !== $wanted) {
+            continue;
+        }
+
+        $found[] = [
+            'session' => $session,
+            'last_in_at' => (string) $last['recognized_at'],
+            'last_event_id' => (int) $last['event_id'],
+        ];
+    }
+
+    usort(
+        $found,
+        static function (array $a, array $b): int {
+            $cmp = strcmp($b['last_in_at'], $a['last_in_at']);
+            if ($cmp !== 0) {
+                return $cmp;
+            }
+
+            return $b['last_event_id'] <=> $a['last_event_id'];
+        }
+    );
+
+    return $found;
+}
+
+/**
  * Resolve the lecture a recognition should attach to.
- * IN_PROGRESS sessions win. SCHEDULED sessions in the early-arrival window
- * are included so PENDING/TOO EARLY work before auto-start.
+ *
+ * ENTRY: live SCHEDULED / IN_PROGRESS only (never COMPLETED).
+ * EXIT: outstanding still-inside sessions first (last event = IN), including
+ * COMPLETED sessions with unresolved checkout; otherwise live session EXIT.
  *
  * @return array<string, mixed>
  */
-function resolve_attendance_session_for_student(int $studentId): array
+function resolve_attendance_session_for_student(int $studentId, ?string $cameraMode = null): array
 {
     sync_scheduled_session_states();
 
@@ -385,23 +501,55 @@ function resolve_attendance_session_for_student(int $studentId): array
         return ['result' => 'INVALID_STUDENT'];
     }
 
+    $mode = $cameraMode !== null && trim($cameraMode) !== ''
+        ? strtoupper(trim($cameraMode))
+        : null;
+
+    if ($mode === 'EXIT') {
+        $outstanding = list_outstanding_inside_sessions_for_student($studentId);
+        if ($outstanding !== []) {
+            if (count($outstanding) > 1) {
+                $ids = array_map(
+                    static fn (array $row): int => (int) $row['session']['session_id'],
+                    $outstanding
+                );
+                $top = $outstanding[0];
+                $second = $outstanding[1];
+                if ($top['last_in_at'] === $second['last_in_at']) {
+                    error_log(
+                        'Ambiguous outstanding EXIT sessions for student_id=' . $studentId
+                        . ' session_ids=' . implode(',', $ids)
+                        . ' last_in_at=' . $top['last_in_at']
+                    );
+
+                    return [
+                        'result' => 'AMBIGUOUS_SESSION',
+                        'student' => $student,
+                        'session_ids' => $ids,
+                    ];
+                }
+                error_log(
+                    'Multiple outstanding inside sessions for student_id=' . $studentId
+                    . '; selecting most recent IN session_id=' . (int) $top['session']['session_id']
+                    . ' session_ids=' . implode(',', $ids)
+                );
+            }
+
+            return [
+                'result' => 'ELIGIBLE',
+                'student' => $student,
+                'session' => $outstanding[0]['session'],
+            ];
+        }
+    }
+
     $now = app_now();
     $today = $now->format('Y-m-d');
     $candidates = [];
     $tooEarly = [];
-    $postSession = [];
     foreach (list_lecture_sessions(['from' => $today, 'to' => $today]) as $session) {
         $status = (string) ($session['status'] ?? '');
-        if ($status === 'CANCELLED') {
-            continue;
-        }
-        if ($status === 'COMPLETED') {
-            if (!is_student_eligible_for_session($studentId, (int) $session['session_id'], true)) {
-                continue;
-            }
-            if (session_in_post_session_exit_window($session, $now)) {
-                $postSession[] = $session;
-            }
+        if ($status === 'CANCELLED' || $status === 'COMPLETED') {
             continue;
         }
         if (!in_array($status, ['SCHEDULED', 'IN_PROGRESS'], true)) {
@@ -428,8 +576,17 @@ function resolve_attendance_session_for_student(int $studentId): array
         $candidates[] = $session;
     }
 
-    if ($candidates === [] && $postSession !== []) {
-        $candidates = $postSession;
+    if ($candidates === [] && $mode === 'EXIT') {
+        // Prefer completed already-outside over early SCHEDULED windows so a
+        // post-checkout EXIT does not create early-pending on the next lecture.
+        $alreadyOutside = list_completed_already_outside_sessions_for_student($studentId);
+        if ($alreadyOutside !== []) {
+            return [
+                'result' => 'ELIGIBLE',
+                'student' => $student,
+                'session' => $alreadyOutside[0]['session'],
+            ];
+        }
     }
 
     if ($candidates === [] && $tooEarly !== []) {
@@ -506,9 +663,9 @@ function public_attendance_result(array $resolution): array
  * - At/after scheduled start, lifecycle sync promotes pending inside → one IN
  *   with recognized_at = scheduled_start. Live recognitions then use the
  *   existing IN/OUT/re-entry engine.
- * - After COMPLETED, EXIT only is accepted for POST_SESSION_EXIT_CAPTURE_MINUTES
- *   for students still inside at effective teaching end. Timestamp is real.
- *   Final teaching-time calculations still clip at effective teaching end.
+ * - After COMPLETED, EXIT only closes an outstanding still-inside IN for that
+ *   session (no fixed minute window). Timestamp is physical. Final teaching-time
+ *   calculations still clip at effective teaching end.
  *
  * @return array<string, mixed>
  */
@@ -518,9 +675,19 @@ function record_face_attendance_event(
     ?string $cameraId = null,
     ?string $cameraMode = null
 ): array {
-    $resolution = resolve_attendance_session_for_student($studentId);
+    $camera = normalize_camera_id($cameraId);
+    $mode = normalize_camera_mode($cameraMode, $camera);
+    $resolution = resolve_attendance_session_for_student($studentId, $mode);
     if (($resolution['result'] ?? '') !== 'ELIGIBLE') {
-        return public_attendance_result($resolution);
+        $public = public_attendance_result($resolution);
+        error_log(
+            'Attendance recognition student_id=' . $studentId
+            . ' camera_mode=' . $mode
+            . ' resolved_session=none'
+            . ' result=' . ($public['result'] ?? '')
+        );
+
+        return $public + ['camera_mode' => $mode, 'camera_id' => $camera];
     }
 
     /** @var array<string, mixed> $session */
@@ -530,8 +697,6 @@ function record_face_attendance_event(
     if ($fresh !== null) {
         $session = $fresh;
     }
-    $camera = normalize_camera_id($cameraId);
-    $mode = normalize_camera_mode($cameraMode, $camera);
     $confidence = max(0.0, min(100.0, round($confidence, 2)));
     $now = app_now();
     $start = session_scheduled_datetime($session, 'start');
@@ -568,7 +733,15 @@ function record_face_attendance_event(
     }
 
     if (($session['status'] ?? '') === 'COMPLETED') {
-        return record_post_session_exit_event($base, $studentId, $session, $mode, $confidence, $camera, $now);
+        $completedResult = record_post_session_exit_event($base, $studentId, $session, $mode, $confidence, $camera, $now);
+        error_log(
+            'Attendance recognition student_id=' . $studentId
+            . ' camera_mode=' . $mode
+            . ' resolved_session=' . $sessionId
+            . ' result=' . ($completedResult['result'] ?? '')
+        );
+
+        return $completedResult;
     }
 
     if ($session['status'] !== 'IN_PROGRESS') {
@@ -666,6 +839,13 @@ function record_face_attendance_event(
             $result = 'RE_ENTERED';
         }
 
+        error_log(
+            'Attendance recognition student_id=' . $studentId
+            . ' camera_mode=' . $mode
+            . ' resolved_session=' . $sessionId
+            . ' result=' . $result
+        );
+
         return $base + [
             'result' => $result,
             'event_id' => $eventId,
@@ -689,9 +869,10 @@ function record_face_attendance_event(
 }
 
 /**
- * Audit-only EXIT after teaching end.
+ * Audit-only EXIT after teaching end for students still logically inside.
  * Inserts attendance_events.OUT and copies that timestamp onto
  * attendance_records.last_exit. Teaching-time fields are not changed.
+ * Eligibility is outstanding last-event=IN, not a fixed capture window.
  *
  * @param array<string, mixed> $base
  * @param array<string, mixed> $session
@@ -711,7 +892,7 @@ function record_post_session_exit_event(
     if (($session['status'] ?? '') !== 'COMPLETED' || !$effectiveEnd instanceof DateTimeImmutable) {
         return $base + ['result' => 'NO_ACTIVE_SESSION'];
     }
-    if ($mode !== 'EXIT' || $now <= $effectiveEnd || !session_in_post_session_exit_window($session, $now)) {
+    if ($mode !== 'EXIT' || $now < $effectiveEnd) {
         return $base + ['result' => 'NO_ACTIVE_SESSION'];
     }
 
@@ -746,7 +927,7 @@ function record_post_session_exit_event(
         }
         $lockedSession['actual_end'] = $lockedSession['actual_end'] ?? $session['actual_end'] ?? null;
         $end = session_effective_teaching_end($lockedSession) ?? $effectiveEnd;
-        if ($now <= $end || $now > $end->modify('+' . post_session_exit_capture_minutes() . ' minutes')) {
+        if ($now < $end) {
             $pdo->rollBack();
             return $base + ['result' => 'NO_ACTIVE_SESSION'];
         }
@@ -771,28 +952,12 @@ function record_post_session_exit_event(
         $lastType = is_array($last) ? (string) $last['event_type'] : null;
         $insideAtEnd = $lastType === 'IN';
 
-        $postOut = $pdo->prepare(
-            "SELECT event_id, recognized_at FROM attendance_events
-             WHERE student_id = :student_id AND session_id = :session_id
-               AND event_type = 'OUT' AND recognized_at > :effective_end
-             ORDER BY recognized_at ASC, event_id ASC
-             LIMIT 1"
-        );
-        $postOut->execute([
-            'student_id' => $studentId,
-            'session_id' => $sessionId,
-            'effective_end' => $end->format('Y-m-d H:i:s'),
-        ]);
-        $existingPostOut = $postOut->fetch();
-        $postOut->closeCursor();
-
-        if (!$insideAtEnd || $existingPostOut !== false) {
-            $source = $existingPostOut !== false ? $existingPostOut : (is_array($last) ? $last : null);
+        if (!$insideAtEnd) {
             $pdo->commit();
             return $base + [
                 'result' => 'ALREADY_OUTSIDE',
-                'event_id' => is_array($source) ? (int) $source['event_id'] : null,
-                'recognized_at' => is_array($source) ? (string) $source['recognized_at'] : null,
+                'event_id' => is_array($last) ? (int) $last['event_id'] : null,
+                'recognized_at' => is_array($last) ? (string) $last['recognized_at'] : null,
             ];
         }
 
@@ -1075,6 +1240,10 @@ function session_effective_teaching_end(array $session): ?DateTimeImmutable
     return $scheduledEnd;
 }
 
+/**
+ * Legacy helper previously used for the fixed POST_SESSION_EXIT_CAPTURE_MINUTES window.
+ * Recognition no longer gates outstanding final OUT on this window; kept for compatibility.
+ */
 function session_in_post_session_exit_window(array $session, DateTimeImmutable $now): bool
 {
     if (($session['status'] ?? '') !== 'COMPLETED') {
@@ -1084,7 +1253,7 @@ function session_in_post_session_exit_window(array $session, DateTimeImmutable $
     if (!$end instanceof DateTimeImmutable) {
         return false;
     }
-    if ($now <= $end) {
+    if ($now < $end) {
         return false;
     }
     $captureEnd = $end->modify('+' . post_session_exit_capture_minutes() . ' minutes');

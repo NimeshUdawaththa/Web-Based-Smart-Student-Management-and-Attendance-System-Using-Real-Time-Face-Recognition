@@ -3,7 +3,17 @@
 declare(strict_types=1);
 
 /**
- * DEVELOPMENT helper — post-session EXIT audit capture (Tests A–F).
+ * DEVELOPMENT helper — session-specific final OUT after COMPLETED (legacy script name).
+ *
+ * Tests:
+ *   A EXIT +4m after end → CHECKED_OUT + last_exit
+ *   B second EXIT → ALREADY_OUTSIDE, last_exit unchanged
+ *   C ENTRY after complete → no IN
+ *   D EXIT +11m after already checked out → ALREADY_OUTSIDE (no rewrite)
+ *   E already OUT before end → no post-session OUT
+ *   F recalculate keeps teaching math + physical last_exit
+ *   G first EXIT +11m while still inside → CHECKED_OUT (no 10-minute gate)
+ *   H first EXIT +45m while still inside → CHECKED_OUT
  *
  * Usage:
  *   C:\xampp\php\php.exe database/scripts/test_post_session_exit.php
@@ -180,7 +190,7 @@ function snapshot_calc(?array $row): array
 echo 'timezone=' . APP_TIMEZONE . PHP_EOL;
 echo 'student_id=' . $studentId . PHP_EOL;
 echo 'session_id=' . $sessionId . PHP_EOL;
-echo 'capture_minutes=' . post_session_exit_capture_minutes() . PHP_EOL;
+echo 'legacy_capture_minutes=' . post_session_exit_capture_minutes() . ' (unused by recognition path)' . PHP_EOL;
 
 wipe_post($sessionId);
 complete_post_session($sessionId, $start, $end);
@@ -247,11 +257,16 @@ if (($c['result'] ?? '') === 'NO_ACTIVE_SESSION' && count($insC) === 2) {
 freeze_now($end->modify('+11 minutes'));
 $d = record_face_attendance_event($studentId, 88.0, 'webcam-0', 'EXIT');
 $eventsD = events_for($sessionId, $studentId);
-echo 'testD result=' . ($d['result'] ?? '') . ' events=' . count($eventsD) . PHP_EOL;
-if (($d['result'] ?? '') === 'NO_ACTIVE_SESSION' && count($eventsD) === count($eventsB)) {
-    pass('D EXIT after 10-minute window creates no event');
+$rowD = record_for_post($sessionId, $studentId);
+echo 'testD result=' . ($d['result'] ?? '') . ' events=' . count($eventsD) . ' last_exit=' . ($rowD['last_exit'] ?? '') . PHP_EOL;
+if (
+    ($d['result'] ?? '') === 'ALREADY_OUTSIDE'
+    && count($eventsD) === count($eventsB)
+    && ($rowD['last_exit'] ?? '') === $expectedOut
+) {
+    pass('D EXIT after checkout (even past former 10m window) does not rewrite last_exit');
 } else {
-    fail('D expected NO_ACTIVE_SESSION after capture window');
+    fail('D expected ALREADY_OUTSIDE with unchanged last_exit');
 }
 
 finalize_session_attendance($sessionId);
@@ -278,6 +293,46 @@ if (($e['result'] ?? '') === 'ALREADY_OUTSIDE' && count($eventsE) === count($eve
     pass('E already OUT before 09:00 gets no post-session OUT');
 } else {
     fail('E expected ALREADY_OUTSIDE and no extra OUT');
+}
+
+wipe_post($sessionId);
+complete_post_session($sessionId, $start, $end);
+add_post_event($studentId, $sessionId, 'IN', $start->modify('+2 minutes'));
+finalize_session_attendance($sessionId);
+$calcG = snapshot_calc(record_for_post($sessionId, $studentId));
+$expectedG = $end->modify('+11 minutes')->format('Y-m-d H:i:s');
+freeze_now($end->modify('+11 minutes'));
+$g = record_face_attendance_event($studentId, 88.0, 'webcam-0', 'EXIT');
+$rowG = record_for_post($sessionId, $studentId);
+echo 'testG result=' . ($g['result'] ?? '') . ' last_exit=' . ($rowG['last_exit'] ?? '') . PHP_EOL;
+if (
+    ($g['result'] ?? '') === 'CHECKED_OUT'
+    && ($rowG['last_exit'] ?? '') === $expectedG
+    && snapshot_calc($rowG) === $calcG
+) {
+    pass('G EXIT +11m while still inside records final OUT (no 10-minute gate)');
+} else {
+    fail('G expected CHECKED_OUT at +11m with calc unchanged');
+}
+
+wipe_post($sessionId);
+complete_post_session($sessionId, $start, $end);
+add_post_event($studentId, $sessionId, 'IN', $start->modify('+2 minutes'));
+finalize_session_attendance($sessionId);
+$calcH = snapshot_calc(record_for_post($sessionId, $studentId));
+$expectedH = $end->modify('+45 minutes')->format('Y-m-d H:i:s');
+freeze_now($end->modify('+45 minutes'));
+$h = record_face_attendance_event($studentId, 88.0, 'webcam-0', 'EXIT');
+$rowH = record_for_post($sessionId, $studentId);
+echo 'testH result=' . ($h['result'] ?? '') . ' last_exit=' . ($rowH['last_exit'] ?? '') . PHP_EOL;
+if (
+    ($h['result'] ?? '') === 'CHECKED_OUT'
+    && ($rowH['last_exit'] ?? '') === $expectedH
+    && snapshot_calc($rowH) === $calcH
+) {
+    pass('H EXIT +45m while still inside records final OUT');
+} else {
+    fail('H expected CHECKED_OUT at +45m with calc unchanged');
 }
 
 set_app_now_override(null);
