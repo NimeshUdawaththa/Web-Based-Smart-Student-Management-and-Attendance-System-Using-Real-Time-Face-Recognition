@@ -42,10 +42,28 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
                 (string) ($_POST['confirm_password'] ?? '')
             );
             set_flash('success', 'Password changed successfully.');
+        } elseif ($action === 'upload_profile_photo') {
+            if ((string) $user['role'] !== 'STUDENT') {
+                throw new InvalidArgumentException('Only students can upload a profile photo.');
+            }
+            $upload = $_FILES['profile_photo'] ?? null;
+            if (!is_array($upload)) {
+                throw new InvalidArgumentException('Choose a profile photo to upload.');
+            }
+            student_upload_own_profile_photo($authenticatedUserId, $upload);
+            set_flash('success', 'Profile photo updated successfully.');
+        } elseif ($action === 'remove_profile_photo') {
+            if ((string) $user['role'] !== 'STUDENT') {
+                throw new InvalidArgumentException('Only students can remove a profile photo.');
+            }
+            student_remove_own_profile_photo($authenticatedUserId);
+            set_flash('success', 'Profile photo removed.');
         } else {
             throw new InvalidArgumentException('Unknown action.');
         }
     } catch (InvalidArgumentException $exception) {
+        set_flash('error', $exception->getMessage());
+    } catch (RuntimeException $exception) {
         set_flash('error', $exception->getMessage());
     }
 
@@ -57,6 +75,9 @@ $account = $profile['account'];
 $person = $profile['person'];
 $editable = $profile['editable'];
 $canEditNames = in_array('first_name', $editable, true);
+$isStudent = (string) $account['role'] === 'STUDENT' && is_array($person);
+$hasProfilePhoto = $isStudent
+    && profile_photo_resolve_path(isset($person['profile_photo']) ? (string) $person['profile_photo'] : null) !== null;
 
 $form = [
     'email' => (string) $account['email'],
@@ -71,6 +92,43 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
 <p class="text-muted mb-4">
     Manage your own account details. Academic and permission fields are read-only.
 </p>
+
+<?php if ($isStudent): ?>
+    <div class="card shadow-sm mb-4">
+        <div class="card-header bg-white">
+            <h2 class="h6 mb-0">Profile photo</h2>
+        </div>
+        <div class="card-body">
+            <p class="text-muted small mb-3">
+                Optional display photo only. This is separate from Face Enrollment used for attendance.
+            </p>
+            <div class="d-flex align-items-center gap-3 flex-wrap mb-3">
+                <?= render_student_profile_avatar($person, 'lg') ?>
+                <div>
+                    <div class="fw-semibold"><?= e($profile['display_name']) ?></div>
+                    <div class="small text-muted"><?= $hasProfilePhoto ? 'Custom photo' : 'Default avatar' ?></div>
+                </div>
+            </div>
+            <form method="post" enctype="multipart/form-data" class="mb-3">
+                <?= csrf_field() ?>
+                <input type="hidden" name="action" value="upload_profile_photo">
+                <div class="mb-2">
+                    <label for="profile_photo" class="form-label">Upload / replace photo</label>
+                    <input type="file" class="form-control" id="profile_photo" name="profile_photo" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" required>
+                    <div class="form-text">JPG, PNG, or WebP. Maximum 2 MB.</div>
+                </div>
+                <button type="submit" class="btn btn-primary btn-sm">Upload photo</button>
+            </form>
+            <?php if ($hasProfilePhoto): ?>
+                <form method="post" onsubmit="return confirm('Remove your profile photo?');">
+                    <?= csrf_field() ?>
+                    <input type="hidden" name="action" value="remove_profile_photo">
+                    <button type="submit" class="btn btn-outline-danger btn-sm">Remove photo</button>
+                </form>
+            <?php endif; ?>
+        </div>
+    </div>
+<?php endif; ?>
 
 <div class="row g-4">
     <div class="col-lg-7">

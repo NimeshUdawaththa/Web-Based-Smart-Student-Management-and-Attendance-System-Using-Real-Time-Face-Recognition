@@ -1004,6 +1004,7 @@ function get_student(int $studentId): ?array
     $statement = db()->prepare(
         "SELECT s.student_id, s.user_id, s.registration_no, s.first_name, s.last_name, s.phone,
                 s.date_of_birth, s.gender, s.course_id, s.batch_id, s.enrollment_date, s.status,
+                s.profile_photo,
                 u.username, u.email, u.status AS account_status,
                 c.course_code, c.course_name,
                 b.batch_name,

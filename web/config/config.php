@@ -19,6 +19,10 @@ define(
     'EVENT_POSTER_MAX_BYTES',
     max(1, (int) (env('EVENT_POSTER_MAX_BYTES', '5242880') ?? '5242880'))
 );
+define(
+    'PROFILE_PHOTO_MAX_BYTES',
+    max(1, (int) (env('PROFILE_PHOTO_MAX_BYTES', '2097152') ?? '2097152'))
+);
 
 define('APP_NAME', env('APP_NAME', 'Smart Student Management') ?? 'Smart Student Management');
 define('APP_ENV', env('APP_ENV', 'local') ?? 'local');

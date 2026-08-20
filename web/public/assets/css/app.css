@@ -106,3 +106,38 @@ body {
 .lecturer-cal-event--cancelled .fw-semibold {
     text-decoration: line-through;
 }
+
+.profile-avatar {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    object-fit: cover;
+    flex-shrink: 0;
+    background-color: #e9ecef;
+    color: #495057;
+    font-weight: 600;
+    overflow: hidden;
+}
+
+.profile-avatar--sm {
+    width: 40px;
+    height: 40px;
+    font-size: 0.85rem;
+}
+
+.profile-avatar--md {
+    width: 72px;
+    height: 72px;
+    font-size: 1.25rem;
+}
+
+.profile-avatar--lg {
+    width: 112px;
+    height: 112px;
+    font-size: 1.75rem;
+}
+
+.profile-avatar--placeholder {
+    border: 1px solid #dee2e6;
+}

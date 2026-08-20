@@ -45,6 +45,14 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
     <a href="<?= e(app_url($studentRoutePrefix . '/index.php')) ?>" class="btn btn-outline-secondary">Back to directory</a>
 </div>
 
+<div class="d-flex align-items-center gap-3 mb-4">
+    <?= render_student_profile_avatar($student, 'md') ?>
+    <div>
+        <div class="fw-semibold"><?= e($student['first_name'] . ' ' . $student['last_name']) ?></div>
+        <div class="small text-muted"><?= e((string) $student['registration_no']) ?></div>
+    </div>
+</div>
+
 <div class="card shadow-sm mb-4">
     <div class="card-body">
         <dl class="row mb-0">
