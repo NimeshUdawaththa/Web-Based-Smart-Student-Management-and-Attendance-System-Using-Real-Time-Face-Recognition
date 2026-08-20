@@ -20,6 +20,27 @@ function role_profile_path(string $role): string
     };
 }
 
+/** Safe display name for chrome (never exposes secrets). */
+function current_user_display_name(): string
+{
+    $user = current_user();
+    if ($user === null) {
+        return '';
+    }
+
+    try {
+        $profile = load_own_profile((int) $user['user_id']);
+        $name = trim((string) ($profile['display_name'] ?? ''));
+        if ($name !== '') {
+            return $name;
+        }
+    } catch (Throwable) {
+        // Fall through to username.
+    }
+
+    return (string) ($user['username'] ?? '');
+}
+
 /**
  * @return array<string, mixed>|null
  */

@@ -62,6 +62,17 @@ body {
 .dashboard-sidebar {
     width: var(--ams-sidebar-width);
     min-height: 100vh;
+    max-height: 100vh;
+    position: sticky;
+    top: 0;
+    overflow-y: auto;
+    background: linear-gradient(180deg, #0b5ed7 0%, #0a58ca 55%, #084298 100%);
+    flex-shrink: 0;
+}
+
+.dashboard-offcanvas {
+    --bs-offcanvas-width: min(20rem, 88vw);
+    background: linear-gradient(180deg, #0b5ed7 0%, #0a58ca 55%, #084298 100%) !important;
 }
 
 .dashboard-content {
@@ -85,6 +96,11 @@ body {
     color: var(--ams-text);
 }
 
+.dashboard-role-badge {
+    font-weight: 575;
+    letter-spacing: 0.02em;
+}
+
 .dashboard-content > main,
 .app-main {
     color: var(--ams-text);
@@ -95,26 +111,170 @@ body {
     color: var(--ams-text-muted) !important;
 }
 
-.active-sidebar-link {
-    background-color: rgba(255, 255, 255, 0.18);
-    border-radius: var(--ams-radius-sm);
-    font-weight: 600;
+/* Brand */
+.dashboard-brand__link {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.7rem;
+    color: #fff;
 }
 
-.dashboard-sidebar .nav-link {
+.dashboard-brand__icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.35rem;
+    height: 2.35rem;
+    border-radius: var(--ams-radius);
+    background: rgba(255, 255, 255, 0.16);
+    font-size: 1.2rem;
+    flex-shrink: 0;
+}
+
+.dashboard-brand__text {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    line-height: 1.2;
+}
+
+.dashboard-brand__name {
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    font-size: 1.15rem;
+}
+
+.dashboard-brand__tagline {
+    margin-top: 0.2rem;
+    font-size: 0.72rem;
+    color: rgba(255, 255, 255, 0.72);
+    font-weight: 500;
+}
+
+/* Grouped nav */
+.dashboard-nav__group + .dashboard-nav__group {
+    margin-top: 0.85rem;
+}
+
+.dashboard-nav__heading {
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.55);
+    padding: 0.15rem 0.75rem 0.35rem;
+}
+
+.dashboard-nav__link {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    color: rgba(255, 255, 255, 0.78) !important;
     border-radius: var(--ams-radius-sm);
     padding: 0.45rem 0.75rem;
     transition: background-color var(--ams-transition), color var(--ams-transition);
 }
 
-.dashboard-sidebar .nav-link:hover {
-    background-color: rgba(255, 255, 255, 0.1);
+.dashboard-nav__link i {
+    font-size: 1rem;
+    width: 1.1rem;
+    text-align: center;
+    opacity: 0.92;
+}
+
+.dashboard-nav__link:hover {
+    background-color: rgba(255, 255, 255, 0.12);
     color: #fff !important;
 }
 
-.dashboard-sidebar .navbar-brand {
-    font-weight: 650;
-    letter-spacing: -0.015em;
+.active-sidebar-link {
+    background-color: rgba(255, 255, 255, 0.2) !important;
+    color: #fff !important;
+    font-weight: 600;
+    box-shadow: inset 3px 0 0 #fff;
+}
+
+.dashboard-logout .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+}
+
+/* Dashboard composition helpers */
+.app-dashboard-welcome {
+    margin-bottom: 1.25rem;
+}
+
+.app-dashboard-welcome__title {
+    margin: 0;
+    font-size: 1.45rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+}
+
+.app-dashboard-welcome__meta {
+    margin: 0.35rem 0 0;
+    color: var(--ams-text-muted);
+}
+
+.app-dashboard-section {
+    margin-bottom: 1.5rem;
+}
+
+.app-dashboard-section__title {
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--ams-text-muted);
+    margin: 0 0 0.75rem;
+}
+
+.app-action-card {
+    height: 100%;
+    border: 1px solid var(--ams-border);
+    border-radius: var(--ams-radius-lg);
+    box-shadow: var(--ams-shadow);
+    background: var(--ams-surface);
+    transition: box-shadow var(--ams-transition), border-color var(--ams-transition);
+}
+
+.app-action-card:hover {
+    box-shadow: var(--ams-shadow-hover);
+    border-color: rgba(var(--ams-primary-rgb), 0.28);
+}
+
+.app-action-card .card-body {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+.app-action-card__icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.25rem;
+    height: 2.25rem;
+    border-radius: var(--ams-radius);
+    background: var(--ams-primary-soft);
+    color: var(--ams-primary);
+    margin-bottom: 0.65rem;
+}
+
+.app-action-card .btn {
+    margin-top: auto;
+    align-self: flex-start;
+}
+
+.app-feed-card .list-unstyled a {
+    font-weight: 575;
+    text-decoration: none;
+}
+
+.app-feed-card .list-unstyled a:hover {
+    text-decoration: underline;
 }
 
 /* -----------------------------------------------------------------------------
@@ -658,11 +818,6 @@ form.card.shadow-sm.mb-4 > .card-body {
 @media (max-width: 991.98px) {
     .dashboard-shell {
         flex-direction: column;
-    }
-
-    .dashboard-sidebar {
-        width: 100%;
-        min-height: auto;
     }
 
     .dashboard-topbar {

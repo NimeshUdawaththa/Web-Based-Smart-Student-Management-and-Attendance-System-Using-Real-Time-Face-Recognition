@@ -1716,71 +1716,153 @@ function update_academic_staff_member(int $staffId, array $data): void
 /**
  * @return list<array{label: string, href: string, active?: bool}>
  */
+/**
+ * Flat role navigation (labels/hrefs unchanged for authorization & tests).
+ * Optional keys: group, icon (Bootstrap Icons name without bi- prefix).
+ *
+ * @return list<array{label: string, href: string, group?: string, icon?: string}>
+ */
 function management_nav_items(string $role): array
 {
     return match ($role) {
         'ADMIN' => [
-            ['label' => 'Dashboard', 'href' => app_url('admin/dashboard.php')],
-            ['label' => 'User Management', 'href' => app_url('admin/users/index.php')],
-            ['label' => 'Student Management', 'href' => app_url('admin/students/index.php')],
-            ['label' => 'Lecturer Management', 'href' => app_url('admin/lecturers/index.php')],
-            ['label' => 'Academic Staff', 'href' => app_url('admin/academic-staff/index.php')],
-            ['label' => 'Courses', 'href' => app_url('admin/courses/index.php')],
-            ['label' => 'Batches', 'href' => app_url('admin/batches/index.php')],
-            ['label' => 'Module Catalogue', 'href' => app_url('admin/modules/index.php')],
-            ['label' => 'Lecturer Assignments', 'href' => app_url('admin/module-assignments/index.php')],
-            ['label' => 'Module Enrollment', 'href' => app_url('admin/enrollments/index.php')],
-            ['label' => 'Lecture Calendar', 'href' => app_url('admin/calendar/index.php')],
-            ['label' => 'Lecture Sessions', 'href' => app_url('admin/sessions/index.php')],
-            ['label' => 'Attendance Reports', 'href' => app_url('admin/attendance/reports.php')],
-            ['label' => 'Coursework Monitor', 'href' => app_url('admin/assignments/index.php')],
-            ['label' => 'Marks Monitor', 'href' => app_url('admin/marks/index.php')],
-            ['label' => 'Announcements', 'href' => app_url('admin/announcements/index.php')],
-            ['label' => 'Events', 'href' => app_url('admin/events/index.php')],
-            ['label' => 'Camera Management', 'href' => app_url('admin/camera.php')],
+            ['label' => 'Dashboard', 'href' => app_url('admin/dashboard.php'), 'group' => 'OVERVIEW', 'icon' => 'speedometer2'],
+            ['label' => 'User Management', 'href' => app_url('admin/users/index.php'), 'group' => 'PEOPLE', 'icon' => 'people'],
+            ['label' => 'Student Management', 'href' => app_url('admin/students/index.php'), 'group' => 'PEOPLE', 'icon' => 'mortarboard'],
+            ['label' => 'Lecturer Management', 'href' => app_url('admin/lecturers/index.php'), 'group' => 'PEOPLE', 'icon' => 'person-badge'],
+            ['label' => 'Academic Staff', 'href' => app_url('admin/academic-staff/index.php'), 'group' => 'PEOPLE', 'icon' => 'person-workspace'],
+            ['label' => 'Courses', 'href' => app_url('admin/courses/index.php'), 'group' => 'ACADEMIC', 'icon' => 'building'],
+            ['label' => 'Batches', 'href' => app_url('admin/batches/index.php'), 'group' => 'ACADEMIC', 'icon' => 'collection'],
+            ['label' => 'Module Catalogue', 'href' => app_url('admin/modules/index.php'), 'group' => 'ACADEMIC', 'icon' => 'journal-bookmark'],
+            ['label' => 'Lecturer Assignments', 'href' => app_url('admin/module-assignments/index.php'), 'group' => 'ACADEMIC', 'icon' => 'diagram-3'],
+            ['label' => 'Module Enrollment', 'href' => app_url('admin/enrollments/index.php'), 'group' => 'ACADEMIC', 'icon' => 'person-check'],
+            ['label' => 'Lecture Calendar', 'href' => app_url('admin/calendar/index.php'), 'group' => 'TEACHING', 'icon' => 'calendar-event'],
+            ['label' => 'Lecture Sessions', 'href' => app_url('admin/sessions/index.php'), 'group' => 'TEACHING', 'icon' => 'calendar-check'],
+            ['label' => 'Camera Management', 'href' => app_url('admin/camera.php'), 'group' => 'TEACHING', 'icon' => 'camera-video'],
+            ['label' => 'Attendance Reports', 'href' => app_url('admin/attendance/reports.php'), 'group' => 'TEACHING', 'icon' => 'clipboard-check'],
+            ['label' => 'Coursework Monitor', 'href' => app_url('admin/assignments/index.php'), 'group' => 'ASSESSMENT', 'icon' => 'journal-text'],
+            ['label' => 'Marks Monitor', 'href' => app_url('admin/marks/index.php'), 'group' => 'ASSESSMENT', 'icon' => 'bar-chart'],
+            ['label' => 'Announcements', 'href' => app_url('admin/announcements/index.php'), 'group' => 'COMMUNICATION', 'icon' => 'megaphone'],
+            ['label' => 'Events', 'href' => app_url('admin/events/index.php'), 'group' => 'COMMUNICATION', 'icon' => 'calendar2-event'],
         ],
         'ACADEMIC_STAFF' => [
-            ['label' => 'Dashboard', 'href' => app_url('academic-staff/dashboard.php')],
-            ['label' => 'Student Management', 'href' => app_url('academic-staff/students/index.php')],
-            ['label' => 'Lecturers', 'href' => app_url('academic-staff/lecturers/index.php')],
-            ['label' => 'Courses', 'href' => app_url('academic-staff/courses/index.php')],
-            ['label' => 'Batches', 'href' => app_url('academic-staff/batches/index.php')],
-            ['label' => 'Module Catalogue', 'href' => app_url('academic-staff/modules/index.php')],
-            ['label' => 'Lecturer Assignments', 'href' => app_url('academic-staff/module-assignments/index.php')],
-            ['label' => 'Module Enrollment', 'href' => app_url('academic-staff/enrollments/index.php')],
-            ['label' => 'Lecture Calendar', 'href' => app_url('academic-staff/calendar/index.php')],
-            ['label' => 'Lecture Sessions', 'href' => app_url('academic-staff/sessions/index.php')],
-            ['label' => 'Attendance Reports', 'href' => app_url('academic-staff/attendance/reports.php')],
-            ['label' => 'Coursework Monitor', 'href' => app_url('academic-staff/assignments/index.php')],
-            ['label' => 'Marks Monitor', 'href' => app_url('academic-staff/marks/index.php')],
-            ['label' => 'Announcements', 'href' => app_url('academic-staff/announcements/index.php')],
-            ['label' => 'Events', 'href' => app_url('academic-staff/events/index.php')],
-            ['label' => 'Camera Management', 'href' => app_url('academic-staff/camera.php')],
+            ['label' => 'Dashboard', 'href' => app_url('academic-staff/dashboard.php'), 'group' => 'OVERVIEW', 'icon' => 'speedometer2'],
+            ['label' => 'Student Management', 'href' => app_url('academic-staff/students/index.php'), 'group' => 'PEOPLE', 'icon' => 'mortarboard'],
+            ['label' => 'Lecturers', 'href' => app_url('academic-staff/lecturers/index.php'), 'group' => 'PEOPLE', 'icon' => 'person-badge'],
+            ['label' => 'Courses', 'href' => app_url('academic-staff/courses/index.php'), 'group' => 'ACADEMIC', 'icon' => 'building'],
+            ['label' => 'Batches', 'href' => app_url('academic-staff/batches/index.php'), 'group' => 'ACADEMIC', 'icon' => 'collection'],
+            ['label' => 'Module Catalogue', 'href' => app_url('academic-staff/modules/index.php'), 'group' => 'ACADEMIC', 'icon' => 'journal-bookmark'],
+            ['label' => 'Lecturer Assignments', 'href' => app_url('academic-staff/module-assignments/index.php'), 'group' => 'ACADEMIC', 'icon' => 'diagram-3'],
+            ['label' => 'Module Enrollment', 'href' => app_url('academic-staff/enrollments/index.php'), 'group' => 'ACADEMIC', 'icon' => 'person-check'],
+            ['label' => 'Lecture Calendar', 'href' => app_url('academic-staff/calendar/index.php'), 'group' => 'TEACHING', 'icon' => 'calendar-event'],
+            ['label' => 'Lecture Sessions', 'href' => app_url('academic-staff/sessions/index.php'), 'group' => 'TEACHING', 'icon' => 'calendar-check'],
+            ['label' => 'Camera Management', 'href' => app_url('academic-staff/camera.php'), 'group' => 'TEACHING', 'icon' => 'camera-video'],
+            ['label' => 'Attendance Reports', 'href' => app_url('academic-staff/attendance/reports.php'), 'group' => 'TEACHING', 'icon' => 'clipboard-check'],
+            ['label' => 'Coursework Monitor', 'href' => app_url('academic-staff/assignments/index.php'), 'group' => 'ASSESSMENT', 'icon' => 'journal-text'],
+            ['label' => 'Marks Monitor', 'href' => app_url('academic-staff/marks/index.php'), 'group' => 'ASSESSMENT', 'icon' => 'bar-chart'],
+            ['label' => 'Announcements', 'href' => app_url('academic-staff/announcements/index.php'), 'group' => 'COMMUNICATION', 'icon' => 'megaphone'],
+            ['label' => 'Events', 'href' => app_url('academic-staff/events/index.php'), 'group' => 'COMMUNICATION', 'icon' => 'calendar2-event'],
         ],
         'LECTURER' => [
-            ['label' => 'Dashboard', 'href' => app_url('lecturer/dashboard.php')],
-            ['label' => 'Students', 'href' => app_url('lecturer/students/index.php')],
-            ['label' => 'My Calendar', 'href' => app_url('lecturer/schedules/index.php')],
-            ['label' => 'Lecture Sessions', 'href' => app_url('lecturer/sessions/index.php')],
-            ['label' => 'Attendance Reports', 'href' => app_url('lecturer/attendance/reports.php')],
-            ['label' => 'Coursework Assignments', 'href' => app_url('lecturer/assignments/index.php')],
-            ['label' => 'Module Marks', 'href' => app_url('lecturer/marks/index.php')],
-            ['label' => 'Announcements', 'href' => app_url('lecturer/announcements/index.php')],
-            ['label' => 'Events', 'href' => app_url('lecturer/events/index.php')],
+            ['label' => 'Dashboard', 'href' => app_url('lecturer/dashboard.php'), 'group' => 'OVERVIEW', 'icon' => 'speedometer2'],
+            ['label' => 'Students', 'href' => app_url('lecturer/students/index.php'), 'group' => 'TEACHING', 'icon' => 'people'],
+            ['label' => 'My Calendar', 'href' => app_url('lecturer/schedules/index.php'), 'group' => 'TEACHING', 'icon' => 'calendar-event'],
+            ['label' => 'Lecture Sessions', 'href' => app_url('lecturer/sessions/index.php'), 'group' => 'TEACHING', 'icon' => 'calendar-check'],
+            ['label' => 'Attendance Reports', 'href' => app_url('lecturer/attendance/reports.php'), 'group' => 'TEACHING', 'icon' => 'clipboard-check'],
+            ['label' => 'Coursework Assignments', 'href' => app_url('lecturer/assignments/index.php'), 'group' => 'ACADEMIC', 'icon' => 'journal-text'],
+            ['label' => 'Module Marks', 'href' => app_url('lecturer/marks/index.php'), 'group' => 'ACADEMIC', 'icon' => 'bar-chart'],
+            ['label' => 'Announcements', 'href' => app_url('lecturer/announcements/index.php'), 'group' => 'COMMUNICATION', 'icon' => 'megaphone'],
+            ['label' => 'Events', 'href' => app_url('lecturer/events/index.php'), 'group' => 'COMMUNICATION', 'icon' => 'calendar2-event'],
         ],
         'STUDENT' => [
-            ['label' => 'Dashboard', 'href' => app_url('student/dashboard.php')],
-            ['label' => 'My Timetable', 'href' => app_url('student/timetable.php')],
-            ['label' => 'My Attendance', 'href' => app_url('student/attendance.php')],
-            ['label' => 'My Assignments', 'href' => app_url('student/assignments/index.php')],
-            ['label' => 'My Results', 'href' => app_url('student/results/index.php')],
-            ['label' => 'Announcements', 'href' => app_url('student/announcements/index.php')],
-            ['label' => 'Events', 'href' => app_url('student/events/index.php')],
+            ['label' => 'Dashboard', 'href' => app_url('student/dashboard.php'), 'group' => 'MENU', 'icon' => 'speedometer2'],
+            ['label' => 'My Timetable', 'href' => app_url('student/timetable.php'), 'group' => 'MENU', 'icon' => 'calendar3'],
+            ['label' => 'My Attendance', 'href' => app_url('student/attendance.php'), 'group' => 'MENU', 'icon' => 'clipboard-check'],
+            ['label' => 'My Assignments', 'href' => app_url('student/assignments/index.php'), 'group' => 'MENU', 'icon' => 'journal-text'],
+            ['label' => 'My Results', 'href' => app_url('student/results/index.php'), 'group' => 'MENU', 'icon' => 'bar-chart'],
+            ['label' => 'Announcements', 'href' => app_url('student/announcements/index.php'), 'group' => 'MENU', 'icon' => 'megaphone'],
+            ['label' => 'Events', 'href' => app_url('student/events/index.php'), 'group' => 'MENU', 'icon' => 'calendar2-event'],
         ],
         default => [
-            ['label' => 'Dashboard', 'href' => app_url(role_dashboard_path($role))],
+            ['label' => 'Dashboard', 'href' => app_url(role_dashboard_path($role)), 'group' => 'OVERVIEW', 'icon' => 'speedometer2'],
         ],
     };
+}
+
+/**
+ * Group flat nav items for sidebar rendering. Does not change accessible routes.
+ *
+ * @return list<array{label: string, items: list<array<string, mixed>>}>
+ */
+function management_nav_groups(string $role): array
+{
+    $grouped = [];
+    foreach (management_nav_items($role) as $item) {
+        $group = (string) ($item['group'] ?? 'MENU');
+        if (!isset($grouped[$group])) {
+            $grouped[$group] = [
+                'label' => $group,
+                'items' => [],
+            ];
+        }
+        $grouped[$group]['items'][] = $item;
+    }
+
+    return array_values($grouped);
+}
+
+function nav_item_is_active(string $currentPath, string $itemHref): bool
+{
+    $current = rtrim((string) (parse_url($currentPath, PHP_URL_PATH) ?: $currentPath), '/');
+    $item = rtrim((string) (parse_url($itemHref, PHP_URL_PATH) ?: $itemHref), '/');
+    if ($current === '' || $item === '') {
+        return false;
+    }
+    if ($current === $item) {
+        return true;
+    }
+    if (str_ends_with($item, '/index.php')) {
+        $dir = substr($item, 0, -strlen('/index.php'));
+        return $dir !== '' && str_starts_with($current . '/', $dir . '/');
+    }
+
+    return false;
+}
+
+/**
+ * Prefer the longest matching nav href when multiple items could be active.
+ */
+function resolve_active_nav_href(string $currentPath, array $navItems, ?string $profileHref = null): ?string
+{
+    $candidates = $navItems;
+    if ($profileHref !== null && $profileHref !== '') {
+        $candidates[] = ['href' => $profileHref];
+    }
+
+    $bestHref = null;
+    $bestLen = -1;
+    foreach ($candidates as $item) {
+        $href = (string) ($item['href'] ?? '');
+        if ($href === '' || !nav_item_is_active($currentPath, $href)) {
+            continue;
+        }
+        $path = rtrim((string) (parse_url($href, PHP_URL_PATH) ?: $href), '/');
+        $len = strlen($path);
+        if ($len > $bestLen) {
+            $bestLen = $len;
+            $bestHref = $href;
+        }
+    }
+
+    return $bestHref;
+}
+
+/** Read-only KPI helper for dashboards. */
+function count_active_students(): int
+{
+    $statement = db()->query("SELECT COUNT(*) FROM students WHERE status = 'ACTIVE'");
+
+    return (int) $statement->fetchColumn();
 }
 
 function status_badge_class(string $status): string
