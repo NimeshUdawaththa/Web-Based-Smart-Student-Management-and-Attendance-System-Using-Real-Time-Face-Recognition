@@ -178,20 +178,10 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
             <div class="col-md-6 col-xl-4">
                 <div class="card app-action-card">
                     <div class="card-body">
-                        <span class="app-action-card__icon" aria-hidden="true"><i class="bi bi-journal-text"></i></span>
-                        <h3 class="h6 mb-1">Coursework Assignments</h3>
-                        <p class="text-muted small">Create and review assignments for modules you teach.</p>
+                        <span class="app-action-card__icon" aria-hidden="true"><i class="bi bi-journal-bookmark"></i></span>
+                        <h3 class="h6 mb-1">Coursework &amp; Assessments</h3>
+                        <p class="text-muted small">Create and manage assignments, presentations, exams and practicals.</p>
                         <a href="<?= e(app_url('lecturer/assignments/index.php')) ?>" class="btn btn-outline-primary btn-sm">Open</a>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-6 col-xl-4">
-                <div class="card app-action-card">
-                    <div class="card-body">
-                        <span class="app-action-card__icon" aria-hidden="true"><i class="bi bi-bar-chart"></i></span>
-                        <h3 class="h6 mb-1">Module Marks</h3>
-                        <p class="text-muted small">Record quizzes, exams, and other module assessment results.</p>
-                        <a href="<?= e(app_url('lecturer/marks/index.php')) ?>" class="btn btn-outline-primary btn-sm">Open</a>
                     </div>
                 </div>
             </div>

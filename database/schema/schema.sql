@@ -515,6 +515,9 @@ CREATE TABLE attendance_records (
 
 -- -----------------------------------------------------------------------------
 -- 15. assignments
+-- Coursework & Assessments parent (Assignment / Presentation / Exam / Practical).
+-- due_date remains the submission deadline for file-based activities.
+-- scheduled_* is for Exam/Practical sittings (not lecture_sessions).
 -- -----------------------------------------------------------------------------
 CREATE TABLE assignments (
   assignment_id INT UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -523,7 +526,12 @@ CREATE TABLE assignments (
   title VARCHAR(200) NOT NULL,
   description TEXT DEFAULT NULL,
   file_path VARCHAR(255) DEFAULT NULL,
+  activity_type ENUM('ASSIGNMENT', 'PRESENTATION', 'EXAM', 'PRACTICAL') NOT NULL DEFAULT 'ASSIGNMENT',
   due_date DATETIME NOT NULL,
+  scheduled_date DATE DEFAULT NULL,
+  start_time TIME DEFAULT NULL,
+  end_time TIME DEFAULT NULL,
+  room VARCHAR(150) DEFAULT NULL,
   max_marks DECIMAL(8,2) NOT NULL,
   status ENUM('DRAFT', 'PUBLISHED', 'CLOSED') NOT NULL DEFAULT 'DRAFT',
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -531,7 +539,17 @@ CREATE TABLE assignments (
   PRIMARY KEY (assignment_id),
   KEY idx_assignments_module_due (module_id, due_date),
   KEY idx_assignments_lecturer (lecturer_id),
+  KEY idx_assignments_activity_schedule (activity_type, scheduled_date),
   CONSTRAINT chk_assignments_max_marks CHECK (max_marks > 0),
+  CONSTRAINT chk_assignments_schedule CHECK (
+    (scheduled_date IS NULL AND start_time IS NULL AND end_time IS NULL)
+    OR (
+      scheduled_date IS NOT NULL
+      AND start_time IS NOT NULL
+      AND end_time IS NOT NULL
+      AND end_time > start_time
+    )
+  ),
   CONSTRAINT fk_assignments_module
     FOREIGN KEY (module_id) REFERENCES modules (module_id)
     ON DELETE RESTRICT
@@ -544,6 +562,7 @@ CREATE TABLE assignments (
 
 -- -----------------------------------------------------------------------------
 -- 16. assignment_submissions
+-- File submissions for ASSIGNMENT / PRESENTATION only.
 -- One submission record per student per assignment in this initial design.
 -- Resubmission should update this row rather than insert a second row.
 -- -----------------------------------------------------------------------------
@@ -571,8 +590,42 @@ CREATE TABLE assignment_submissions (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- -----------------------------------------------------------------------------
--- 17. marks
--- Module assessment results. recorded_by references lecturers, not users.
+-- 16b. assignment_results
+-- Direct lecturer-entered results for EXAM / PRACTICAL only.
+-- No row = Not Recorded. Never invent zero. Not used for file coursework.
+-- -----------------------------------------------------------------------------
+CREATE TABLE assignment_results (
+  result_id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  assignment_id INT UNSIGNED NOT NULL,
+  student_id INT UNSIGNED NOT NULL,
+  marks_obtained DECIMAL(8,2) NOT NULL,
+  remarks TEXT DEFAULT NULL,
+  recorded_by INT UNSIGNED NOT NULL,
+  recorded_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (result_id),
+  UNIQUE KEY uq_assignment_results_assignment_student (assignment_id, student_id),
+  KEY idx_assignment_results_student (student_id),
+  KEY idx_assignment_results_recorded_by (recorded_by),
+  CONSTRAINT chk_assignment_results_marks_nonneg CHECK (marks_obtained >= 0),
+  CONSTRAINT fk_assignment_results_assignment
+    FOREIGN KEY (assignment_id) REFERENCES assignments (assignment_id)
+    ON DELETE RESTRICT
+    ON UPDATE CASCADE,
+  CONSTRAINT fk_assignment_results_student
+    FOREIGN KEY (student_id) REFERENCES students (student_id)
+    ON DELETE RESTRICT
+    ON UPDATE CASCADE,
+  CONSTRAINT fk_assignment_results_recorded_by
+    FOREIGN KEY (recorded_by) REFERENCES lecturers (lecturer_id)
+    ON DELETE RESTRICT
+    ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- -----------------------------------------------------------------------------
+-- 17. marks (LEGACY — inactive UI; retained for recovery/history only)
+-- Active grading is assignment_submissions (Assignment/Presentation) and
+-- assignment_results (Exam/Practical). Do not drop this table or its rows.
 -- -----------------------------------------------------------------------------
 CREATE TABLE marks (
   mark_id INT UNSIGNED NOT NULL AUTO_INCREMENT,

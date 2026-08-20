@@ -8,9 +8,11 @@ if (!defined('APP_STARTED')) {
 }
 
 /**
- * Module assessment results ledger (`marks`).
+ * Legacy module assessment results ledger (`marks`).
  *
- * Separate from coursework assignment_submissions grades.
+ * Inactive for UI: Coursework & Assessments uses assignment_submissions and
+ * assignment_results. Helpers remain for recovery/history and internal tests.
+ * Do not delete historical marks rows.
  *
  * Duplicate policy (application-level, no schema unique key):
  * Identity = student_id + module_id + assessment_type + assessment_name + recorded_by
@@ -517,4 +519,203 @@ function marks_entry_query(int $moduleId, string $type, string $name, ?int $reco
     }
 
     return $query;
+}
+
+function format_marks_summary_percentage(?float $percent): string
+{
+    if ($percent === null) {
+        return '—';
+    }
+
+    return number_format($percent, 2, '.', '') . '%';
+}
+
+/**
+ * Distinct module assessments from the marks ledger (not coursework).
+ *
+ * @return list<array<string, mixed>>
+ */
+function list_module_assessments_for_summary(int $moduleId, ?int $recordedBy = null): array
+{
+    $sql = "SELECT mk.assessment_type, mk.assessment_name, mk.recorded_by,
+                   MAX(mk.max_marks) AS max_marks,
+                   COUNT(*) AS recorded_count
+            FROM marks mk
+            WHERE mk.module_id = :module_id";
+    $params = ['module_id' => $moduleId];
+
+    if ($recordedBy !== null) {
+        $sql .= ' AND mk.recorded_by = :recorded_by';
+        $params['recorded_by'] = $recordedBy;
+    }
+
+    $sql .= ' GROUP BY mk.assessment_type, mk.assessment_name, mk.recorded_by
+              ORDER BY mk.assessment_type, mk.assessment_name, mk.recorded_by';
+
+    $statement = db()->prepare($sql);
+    $statement->execute($params);
+    $rows = $statement->fetchAll();
+
+    foreach ($rows as &$row) {
+        $row['max_marks'] = (float) $row['max_marks'];
+        $row['recorded_count'] = (int) $row['recorded_count'];
+        $row['recorded_by'] = (int) $row['recorded_by'];
+    }
+    unset($row);
+
+    return $rows;
+}
+
+/**
+ * Read-only module assessment summary for enrolled students.
+ * Totals use marks table only — never coursework assignment grades.
+ * Missing marks are not treated as zero for completeness or final percentage.
+ *
+ * @return array{
+ *   module: array<string, mixed>,
+ *   assessments: list<array<string, mixed>>,
+ *   assessment_count: int,
+ *   total_available: float,
+ *   enrolled_count: int,
+ *   students: list<array<string, mixed>>
+ * }
+ */
+function build_module_assessment_summary(int $moduleId, ?int $recordedBy = null): array
+{
+    $module = get_module($moduleId);
+    if ($module === null) {
+        throw new InvalidArgumentException('Select a valid module.');
+    }
+
+    $assessments = list_module_assessments_for_summary($moduleId, $recordedBy);
+    $totalAvailable = 0.0;
+    foreach ($assessments as $assessment) {
+        $totalAvailable += (float) $assessment['max_marks'];
+    }
+    $totalAvailable = round($totalAvailable, 2);
+
+    $enrolled = list_enrolled_students_for_module($moduleId);
+    $students = [];
+
+    foreach ($enrolled as $student) {
+        $studentId = (int) $student['student_id'];
+        $cells = [];
+        $totalEarned = 0.0;
+        $recordedCount = 0;
+
+        foreach ($assessments as $assessment) {
+            $existing = find_existing_mark_row(
+                $studentId,
+                $moduleId,
+                (string) $assessment['assessment_type'],
+                (string) $assessment['assessment_name'],
+                (int) $assessment['recorded_by']
+            );
+            $maxMarks = (float) $assessment['max_marks'];
+            if ($existing === null) {
+                $cells[] = [
+                    'obtained' => null,
+                    'max_marks' => $maxMarks,
+                    'display' => '—',
+                    'recorded' => false,
+                ];
+                continue;
+            }
+
+            $obtained = (float) $existing['marks_obtained'];
+            $totalEarned += $obtained;
+            $recordedCount++;
+            $cells[] = [
+                'obtained' => $obtained,
+                'max_marks' => (float) $existing['max_marks'],
+                'display' => format_marks_pair($obtained, $existing['max_marks']),
+                'recorded' => true,
+            ];
+        }
+
+        $isComplete = $assessments !== [] && $recordedCount === count($assessments);
+        $percentage = null;
+        if ($isComplete && $totalAvailable > 0) {
+            $percentage = round(($totalEarned / $totalAvailable) * 100, 2);
+        }
+
+        $students[] = [
+            'student_id' => $studentId,
+            'registration_no' => $student['registration_no'],
+            'first_name' => $student['first_name'],
+            'last_name' => $student['last_name'],
+            'cells' => $cells,
+            'total_earned' => round($totalEarned, 2),
+            'total_available' => $totalAvailable,
+            'total_display' => format_marks_pair(round($totalEarned, 2), $totalAvailable),
+            'percentage' => $percentage,
+            'is_complete' => $isComplete,
+            'status' => $isComplete ? 'Complete' : 'Incomplete',
+        ];
+    }
+
+    return [
+        'module' => $module,
+        'assessments' => $assessments,
+        'assessment_count' => count($assessments),
+        'total_available' => $totalAvailable,
+        'enrolled_count' => count($enrolled),
+        'students' => $students,
+    ];
+}
+
+/**
+ * Self-scoped module summaries for a student (marks ledger only).
+ *
+ * @return list<array{
+ *   module: array<string, mixed>,
+ *   assessments: list<array<string, mixed>>,
+ *   assessment_count: int,
+ *   total_available: float,
+ *   row: array<string, mixed>
+ * }>
+ */
+function list_student_module_assessment_summaries(int $studentId): array
+{
+    $statement = db()->prepare(
+        "SELECT DISTINCT m.module_id, m.module_code, m.module_name
+         FROM student_modules sm
+         INNER JOIN modules m ON m.module_id = sm.module_id
+         WHERE sm.student_id = :student_id
+           AND sm.status = 'ENROLLED'
+         ORDER BY m.module_code"
+    );
+    $statement->execute(['student_id' => $studentId]);
+    $modules = $statement->fetchAll();
+    $summaries = [];
+
+    foreach ($modules as $module) {
+        $moduleId = (int) $module['module_id'];
+        $assessments = list_module_assessments_for_summary($moduleId, null);
+        if ($assessments === []) {
+            continue;
+        }
+
+        $summary = build_module_assessment_summary($moduleId, null);
+        $row = null;
+        foreach ($summary['students'] as $studentRow) {
+            if ((int) $studentRow['student_id'] === $studentId) {
+                $row = $studentRow;
+                break;
+            }
+        }
+        if ($row === null) {
+            continue;
+        }
+
+        $summaries[] = [
+            'module' => $summary['module'],
+            'assessments' => $summary['assessments'],
+            'assessment_count' => $summary['assessment_count'],
+            'total_available' => $summary['total_available'],
+            'row' => $row,
+        ];
+    }
+
+    return $summaries;
 }

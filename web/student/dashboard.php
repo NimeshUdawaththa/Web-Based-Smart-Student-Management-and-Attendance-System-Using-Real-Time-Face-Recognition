@@ -128,9 +128,9 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
             <div class="col-md-6 col-xl-4">
                 <div class="card app-action-card">
                     <div class="card-body">
-                        <span class="app-action-card__icon" aria-hidden="true"><i class="bi bi-journal-text"></i></span>
-                        <h3 class="h6 mb-1">My Assignments</h3>
-                        <p class="text-muted small">View instructions and submit work for modules you are enrolled in.</p>
+                        <span class="app-action-card__icon" aria-hidden="true"><i class="bi bi-journal-bookmark"></i></span>
+                        <h3 class="h6 mb-1">Coursework &amp; Assessments</h3>
+                        <p class="text-muted small">View assignments, presentations, exams and practicals for your modules.</p>
                         <a href="<?= e(app_url('student/assignments/index.php')) ?>" class="btn btn-outline-primary btn-sm">Open</a>
                     </div>
                 </div>

@@ -17,115 +17,66 @@ $studentId = (int) $student['student_id'];
 positive_int($_GET['student_id'] ?? null); // ignored — results always come from the signed-in profile
 
 $pageTitle = 'My Results';
-$courseworkRows = list_graded_coursework_results_for_student($studentId);
-$marksRows = list_marks_for_student($studentId);
-$marksSummary = summarize_student_marks($studentId);
+$results = list_unified_student_results($studentId);
 
 require INCLUDES_PATH . '/dashboard-layout-start.php';
 ?>
 
-<p class="text-muted mb-3">Your own coursework grades and module assessment marks. These are stored separately and are not combined into a final module grade.</p>
+<p class="text-muted mb-4">
+    Your graded Assignments and Presentations, and recorded Exam and Practical results.
+    Legacy module marks are not shown here.
+</p>
 
 <div class="row g-3 mb-4">
     <div class="col-md-6 col-lg-4">
         <div class="card shadow-sm">
             <div class="card-body">
-                <div class="text-muted small">Coursework Graded</div>
-                <div class="fs-4"><?= e((string) count($courseworkRows)) ?></div>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-6 col-lg-4">
-        <div class="card shadow-sm">
-            <div class="card-body">
-                <div class="text-muted small">Module Assessments Recorded</div>
-                <div class="fs-4"><?= e((string) $marksSummary['count']) ?></div>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-6 col-lg-4">
-        <div class="card shadow-sm">
-            <div class="card-body">
-                <div class="text-muted small">Module Assessment Average</div>
-                <div class="fs-4"><?= $marksSummary['average_percentage'] === null ? '—' : e(format_marks_percentage($marksSummary['average_percentage'])) ?></div>
-                <div class="small text-muted">Average of module assessment percentages from the marks table only. Not a GPA or combined result.</div>
+                <div class="text-muted small">Recorded results</div>
+                <div class="fs-4"><?= e((string) count($results)) ?></div>
             </div>
         </div>
     </div>
 </div>
 
-<h2 class="h5 mb-3">Coursework Results</h2>
-<div class="card shadow-sm mb-4">
-    <div class="table-responsive">
-        <table class="table table-hover mb-0 align-middle">
-            <thead class="table-light">
-                <tr>
-                    <th>Module</th>
-                    <th>Coursework</th>
-                    <th>Grade</th>
-                    <th>Percentage</th>
-                    <th>Feedback</th>
-                </tr>
-            </thead>
-            <tbody>
-                <?php if ($courseworkRows === []): ?>
-                    <tr>
-                        <td colspan="5" class="p-0">
-                            <div class="app-empty-state">
-                                <p class="app-empty-state__title mb-0">No graded coursework results yet.</p>
-                            </div>
-                        </td>
-                    </tr>
-                <?php else: ?>
-                    <?php foreach ($courseworkRows as $row): ?>
-                        <tr>
-                            <td><?= app_truncate_html($row['module_code'] . ' – ' . $row['module_name'], 'md') ?></td>
-                            <td><?= app_truncate_html((string) $row['title'], 'md') ?></td>
-                            <td><?= e((string) $row['grade_display']) ?></td>
-                            <td><?= $row['percentage'] === null ? '—' : e(format_marks_percentage((float) $row['percentage'])) ?></td>
-                            <td><?= !empty($row['feedback']) ? nl2br(e((string) $row['feedback'])) : '<span class="text-muted">No feedback.</span>' ?></td>
-                        </tr>
-                    <?php endforeach; ?>
-                <?php endif; ?>
-            </tbody>
-        </table>
-    </div>
-</div>
-
-<h2 class="h5 mb-3">Module Assessment Results</h2>
 <div class="card shadow-sm">
     <div class="table-responsive">
         <table class="table table-hover mb-0 align-middle">
             <thead class="table-light">
                 <tr>
                     <th>Module</th>
+                    <th>Activity</th>
                     <th>Type</th>
-                    <th>Assessment</th>
-                    <th>Marks</th>
-                    <th>Percentage</th>
-                    <th>Remarks</th>
-                    <th>Recorded</th>
+                    <th>Result</th>
+                    <th>Max marks</th>
+                    <th>Feedback / Remarks</th>
                 </tr>
             </thead>
             <tbody>
-                <?php if ($marksRows === []): ?>
+                <?php if ($results === []): ?>
                     <tr>
-                        <td colspan="7" class="p-0">
+                        <td colspan="6" class="p-0">
                             <div class="app-empty-state">
-                                <p class="app-empty-state__title mb-0">No assessment results recorded yet.</p>
+                                <p class="app-empty-state__title mb-0">No results recorded yet.</p>
                             </div>
                         </td>
                     </tr>
                 <?php else: ?>
-                    <?php foreach ($marksRows as $row): ?>
+                    <?php foreach ($results as $row): ?>
                         <tr>
                             <td><?= app_truncate_html($row['module_code'] . ' – ' . $row['module_name'], 'md') ?></td>
-                            <td><?= e((string) $row['assessment_type']) ?></td>
-                            <td><?= app_truncate_html((string) $row['assessment_name'], 'md') ?></td>
-                            <td><?= e(format_marks_pair($row['marks_obtained'], $row['max_marks'])) ?></td>
-                            <td><?= e(format_marks_percentage($row['percentage'])) ?></td>
-                            <td><?= e((string) ($row['remarks'] ?? '')) ?></td>
-                            <td><?= e(format_assignment_datetime((string) $row['recorded_at'])) ?></td>
+                            <td><?= app_truncate_html((string) $row['title'], 'md') ?></td>
+                            <td>
+                                <span class="badge <?= e(assignment_activity_badge_class((string) $row['activity_type'])) ?>">
+                                    <?= e((string) $row['activity_label']) ?>
+                                </span>
+                            </td>
+                            <td><?= e((string) $row['result_display']) ?></td>
+                            <td><?= e((string) $row['max_marks']) ?></td>
+                            <td>
+                                <?= !empty($row['feedback_or_remarks'])
+                                    ? nl2br(e((string) $row['feedback_or_remarks']))
+                                    : '<span class="text-muted">—</span>' ?>
+                            </td>
                         </tr>
                     <?php endforeach; ?>
                 <?php endif; ?>

@@ -16,22 +16,70 @@ if ($student === null) {
     return;
 }
 
+$studentId = (int) $student['student_id'];
 $pageTitle = 'My Timetable';
 $today = app_today();
-$todaySessions = list_visible_sessions_for_student((int) $student['student_id'], [
+$view = (string) ($_GET['view'] ?? 'month');
+$anchorDate = validate_date_ymd((string) ($_GET['date'] ?? '')) ? (string) $_GET['date'] : $today;
+$resolved = calendar_resolve_view_range($view, $anchorDate, $today);
+$view = $resolved['view'];
+$anchorDate = $resolved['anchor_date'];
+$rangeFrom = $resolved['range_from'];
+$rangeTo = $resolved['range_to'];
+$heading = $resolved['heading'];
+$prevAnchor = $resolved['prev_anchor'];
+$nextAnchor = $resolved['next_anchor'];
+$gridDays = $resolved['grid_days'];
+/** @var DateTimeImmutable $anchor */
+$anchor = $resolved['anchor'];
+$tz = new DateTimeZone(APP_TIMEZONE);
+$academicRoutePrefix = 'student';
+$calendarPath = 'student/timetable.php';
+$showLecturer = true;
+$filterQueryForNav = [];
+$calendarAllowSessionOpen = false;
+
+$todaySessions = list_visible_sessions_for_student($studentId, [
     'from' => $today,
     'to' => $today,
 ]);
-$upcomingSessions = list_visible_sessions_for_student((int) $student['student_id'], [
+$upcomingSessions = list_visible_sessions_for_student($studentId, [
     'upcoming' => true,
 ]);
+
+$rangeSessions = list_visible_sessions_for_student($studentId, [
+    'from' => $rangeFrom,
+    'to' => $rangeTo,
+]);
+
+$calendarEvents = [];
+foreach ($rangeSessions as $session) {
+    $normalized = calendar_normalize_lecture_event($session, '');
+    if ($normalized !== null) {
+        $calendarEvents[] = $normalized;
+    }
+}
+
+foreach (list_calendar_coursework_for_student($studentId, $rangeFrom, $rangeTo) as $activity) {
+    $normalized = calendar_normalize_coursework_event(
+        $activity,
+        app_url('student/assignments/view.php?id=' . (int) $activity['assignment_id'])
+    );
+    if ($normalized !== null) {
+        $calendarEvents[] = $normalized;
+    }
+}
+
+$calendarEvents = calendar_sort_events($calendarEvents);
+$eventsByDate = calendar_group_events_by_date($calendarEvents);
 
 require INCLUDES_PATH . '/dashboard-layout-start.php';
 ?>
 
 <p class="text-muted mb-4">
-    Showing lectures for <strong><?= e($student['first_name'] . ' ' . $student['last_name']) ?></strong>
-    (<?= e($student['registration_no']) ?>) based on your batch and module enrolments.
+    Showing lectures and scheduled assessments for <strong><?= e($student['first_name'] . ' ' . $student['last_name']) ?></strong>
+    (<?= e($student['registration_no']) ?>) based on your module enrolments.
+    Presentations, Exams and Practicals appear on the calendar; Assignments remain under Coursework &amp; Assessments.
 </p>
 
 <div class="card shadow-sm mb-4">
@@ -118,4 +166,9 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
     </div>
 </div>
 
-<?php require INCLUDES_PATH . '/dashboard-layout-end.php'; ?>
+<h2 class="h5 mb-3">Calendar</h2>
+<p class="text-muted small mb-3">
+    Lectures and scheduled Presentations, Exams and Practicals for modules you are enrolled in.
+</p>
+
+<?php require WEB_PATH . '/shared/pages/calendar/_render.php';

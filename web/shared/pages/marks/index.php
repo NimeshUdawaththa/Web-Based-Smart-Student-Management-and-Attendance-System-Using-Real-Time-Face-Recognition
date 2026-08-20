@@ -19,7 +19,7 @@ if ($marksCanEdit) {
         set_flash('error', 'No lecturer profile is linked to this account.');
         redirect($academicRoutePrefix . '/dashboard.php');
     }
-    $pageTitle = 'Module Marks';
+    $pageTitle = 'Assessment Results';
     $moduleId = positive_int($_GET['module_id'] ?? null);
     if ($moduleId !== null && !lecturer_can_manage_module_marks($restrictLecturerId, $moduleId)) {
         deny_access();
@@ -51,13 +51,21 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
 <div class="app-list-toolbar">
     <p class="app-list-toolbar__desc">
         <?php if ($marksCanEdit): ?>
-            Module assessment results (quizzes, exams, and similar). Coursework assignment grades stay under Coursework Assignments.
+            Record and manage student results for quizzes, tests, exams and other module assessments.
+            Coursework grades are managed separately under Coursework &amp; Assessments.
         <?php else: ?>
             Read-only module assessment results. This is not coursework assignment grading.
         <?php endif; ?>
     </p>
     <?php if ($marksCanEdit): ?>
-        <a class="btn btn-primary" href="<?= e(app_url($academicRoutePrefix . '/marks/entry.php')) ?>">Add assessment results</a>
+        <div class="d-flex flex-wrap gap-2">
+            <a class="btn btn-primary" href="<?= e(app_url($academicRoutePrefix . '/marks/entry.php')) ?>">Add assessment results</a>
+            <?php if ($moduleId !== null): ?>
+                <a class="btn btn-outline-primary" href="<?= e(app_url($academicRoutePrefix . '/marks/summary.php?module_id=' . $moduleId)) ?>">View Module Summary</a>
+            <?php else: ?>
+                <button type="button" class="btn btn-outline-secondary" disabled title="Select a module first">View Module Summary</button>
+            <?php endif; ?>
+        </div>
     <?php endif; ?>
 </div>
 
@@ -119,6 +127,9 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
                 </div>
             </div>
         </div>
+        <?php if ($marksCanEdit): ?>
+            <p class="form-text mb-0 mt-2">Select a module, then use View Module Summary to see enrolled students and assessment totals.</p>
+        <?php endif; ?>
     </div>
 </form>
 
@@ -134,7 +145,7 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
                     <?php if (!$marksCanEdit): ?>
                         <th>Lecturer</th>
                     <?php endif; ?>
-                    <th>Recorded</th>
+                    <th>Students recorded</th>
                     <th class="text-end">Actions</th>
                 </tr>
             </thead>
@@ -149,6 +160,10 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
                     </tr>
                 <?php else: ?>
                     <?php foreach ($assessments as $row): ?>
+                        <?php
+                        $recordedCount = (int) $row['recorded_count'];
+                        $recordedLabel = $recordedCount === 1 ? '1 student' : $recordedCount . ' students';
+                        ?>
                         <tr>
                             <td><?= app_truncate_html((string) ($row['module_code'] . ' – ' . $row['module_name']), 'md') ?></td>
                             <td><?= e((string) $row['assessment_type']) ?></td>
@@ -157,7 +172,7 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
                             <?php if (!$marksCanEdit): ?>
                                 <td><?= e($row['lecturer_first_name'] . ' ' . $row['lecturer_last_name']) ?></td>
                             <?php endif; ?>
-                            <td><?= e((string) $row['recorded_count']) ?></td>
+                            <td><?= e($recordedLabel) ?></td>
                             <td class="text-end">
                                 <?php
                                 $query = marks_entry_query(

@@ -3,7 +3,9 @@
 declare(strict_types=1);
 
 /**
- * Shared lecture calendar view helpers (Lecturer My Calendar + institution Lecture Calendar).
+ * Shared calendar view helpers (Lecturer My Calendar + institution Lecture Calendar).
+ * Combines lecture_sessions with Coursework & Assessments (Presentation/Exam/Practical).
+ * Never creates lecture_sessions or attendance rows for coursework activities.
  */
 
 if (!defined('APP_STARTED')) {
@@ -67,9 +69,155 @@ function calendar_lecturer_display_name(array $session): string
 }
 
 /**
+ * @return list<string>
+ */
+function calendar_event_types(): array
+{
+    return ['LECTURE', 'PRESENTATION', 'EXAM', 'PRACTICAL'];
+}
+
+function calendar_event_type_label(string $type): string
+{
+    return match (strtoupper(trim($type))) {
+        'LECTURE' => 'Lecture',
+        'PRESENTATION' => 'Presentation',
+        'EXAM' => 'Exam',
+        'PRACTICAL' => 'Practical',
+        default => 'Event',
+    };
+}
+
+function calendar_event_type_class(string $type): string
+{
+    return match (strtoupper(trim($type))) {
+        'LECTURE' => 'lecturer-cal-event--type-lecture',
+        'PRESENTATION' => 'lecturer-cal-event--type-presentation',
+        'EXAM' => 'lecturer-cal-event--type-exam',
+        'PRACTICAL' => 'lecturer-cal-event--type-practical',
+        default => 'lecturer-cal-event--type-lecture',
+    };
+}
+
+/**
+ * Normalize a lecture_sessions row for the shared calendar renderer.
+ *
+ * @param array<string, mixed> $session
+ * @return array<string, mixed>|null
+ */
+function calendar_normalize_lecture_event(array $session, string $detailUrl = ''): ?array
+{
+    $date = trim((string) ($session['session_date'] ?? ''));
+    if ($date === '' || !validate_date_ymd($date)) {
+        return null;
+    }
+
+    $startRaw = $session['scheduled_start'] ?? null;
+    $endRaw = $session['scheduled_end'] ?? null;
+    if ($startRaw === null || $startRaw === '' || $endRaw === null || $endRaw === '') {
+        return null;
+    }
+
+    return [
+        'event_type' => 'LECTURE',
+        'source_id' => (int) ($session['session_id'] ?? 0),
+        'title' => (string) ($session['batch_name'] ?? $session['module_name'] ?? 'Lecture'),
+        'module_code' => (string) ($session['module_code'] ?? ''),
+        'module_name' => (string) ($session['module_name'] ?? ''),
+        'event_date' => $date,
+        'start_time' => $startRaw,
+        'end_time' => $endRaw,
+        'status' => (string) ($session['status'] ?? 'SCHEDULED'),
+        'location' => (string) ($session['room'] ?? ''),
+        'detail_url' => $detailUrl,
+        'batch_name' => (string) ($session['batch_name'] ?? ''),
+        'lecturer_name' => calendar_lecturer_display_name($session),
+        'is_lecture' => true,
+        'sort_key' => $date . '|' . format_time_display($startRaw) . '|0|' . (string) ($session['module_code'] ?? ''),
+    ];
+}
+
+/**
+ * Normalize a Presentation/Exam/Practical assignment row.
+ * Uses scheduled_* fields only (never due_date for display).
+ *
+ * @param array<string, mixed> $assignment
+ * @return array<string, mixed>|null
+ */
+function calendar_normalize_coursework_event(array $assignment, string $detailUrl = ''): ?array
+{
+    $type = strtoupper(trim((string) ($assignment['activity_type'] ?? '')));
+    if (!in_array($type, ['PRESENTATION', 'EXAM', 'PRACTICAL'], true)) {
+        return null;
+    }
+
+    $date = trim((string) ($assignment['scheduled_date'] ?? ''));
+    $start = $assignment['start_time'] ?? null;
+    $end = $assignment['end_time'] ?? null;
+    if ($date === '' || !validate_date_ymd($date) || $start === null || $start === '' || $end === null || $end === '') {
+        return null;
+    }
+
+    $status = strtoupper(trim((string) ($assignment['status'] ?? '')));
+    if ($status === 'DRAFT') {
+        return null;
+    }
+
+    return [
+        'event_type' => $type,
+        'source_id' => (int) ($assignment['assignment_id'] ?? 0),
+        'title' => (string) ($assignment['title'] ?? ''),
+        'module_code' => (string) ($assignment['module_code'] ?? ''),
+        'module_name' => (string) ($assignment['module_name'] ?? ''),
+        'event_date' => $date,
+        'start_time' => $start,
+        'end_time' => $end,
+        'status' => $status !== '' ? $status : 'PUBLISHED',
+        'location' => (string) ($assignment['room'] ?? ''),
+        'detail_url' => $detailUrl,
+        'batch_name' => '',
+        'lecturer_name' => trim(
+            (string) ($assignment['lecturer_first_name'] ?? '') . ' ' . (string) ($assignment['lecturer_last_name'] ?? '')
+        ),
+        'is_lecture' => false,
+        'sort_key' => $date . '|' . format_time_display($start) . '|1|' . (string) ($assignment['module_code'] ?? ''),
+    ];
+}
+
+/**
+ * @param list<array<string, mixed>> $events
+ * @return list<array<string, mixed>>
+ */
+function calendar_sort_events(array $events): array
+{
+    usort($events, static function (array $a, array $b): int {
+        return strcmp((string) ($a['sort_key'] ?? ''), (string) ($b['sort_key'] ?? ''));
+    });
+
+    return $events;
+}
+
+/**
+ * @param list<array<string, mixed>> $events
+ * @return array<string, list<array<string, mixed>>>
+ */
+function calendar_group_events_by_date(array $events): array
+{
+    $byDate = [];
+    foreach (calendar_sort_events($events) as $event) {
+        $day = (string) ($event['event_date'] ?? '');
+        if ($day === '') {
+            continue;
+        }
+        $byDate[$day][] = $event;
+    }
+
+    return $byDate;
+}
+
+/**
  * Resolve month/week/today date ranges for lecture_sessions queries.
  *
- * @return array{view: string, anchor_date: string, range_from: string, range_to: string, heading: string, prev_anchor: string, next_anchor: string, grid_days: list<string>}
+ * @return array{view: string, anchor_date: string, range_from: string, range_to: string, heading: string, prev_anchor: string, next_anchor: string, grid_days: list<string>, anchor: DateTimeImmutable}
  */
 function calendar_resolve_view_range(string $view, string $anchorDate, string $today): array
 {

@@ -18,7 +18,7 @@ $assignmentId = positive_int($_GET['id'] ?? null);
 $assignment = $assignmentId !== null ? get_coursework_assignment($assignmentId) : null;
 
 if ($assignment === null) {
-    set_flash('error', 'Assignment not found.');
+    set_flash('error', 'Activity not found.');
     redirect($academicRoutePrefix . '/assignments/index.php');
 }
 
@@ -30,18 +30,30 @@ if ($courseworkCanEdit) {
     deny_access();
 }
 
+if (!assignment_requires_submission($assignment)) {
+    set_flash('error', 'Submissions are only available for Assignment and Presentation activities. Use Results for this activity.');
+    redirect($academicRoutePrefix . '/assignments/results.php?id=' . $assignment['assignment_id']);
+}
+
 $rows = list_assignment_submission_matrix((int) $assignment['assignment_id']);
+$typeLabel = assignment_activity_type_label($assignment);
 $pageTitle = 'Submissions — ' . (string) $assignment['title'];
 
 require INCLUDES_PATH . '/dashboard-layout-start.php';
 ?>
 
 <div class="mb-3">
-    <a href="<?= e(app_url($academicRoutePrefix . '/assignments/view.php?id=' . $assignment['assignment_id'])) ?>">&larr; Assignment details</a>
+    <a href="<?= e(app_url($academicRoutePrefix . '/assignments/view.php?id=' . $assignment['assignment_id'])) ?>">&larr; Activity details</a>
 </div>
 
 <p class="text-muted">
-    Enrolled students in <?= e($assignment['module_code']) ?>. Due <?= e(format_assignment_datetime((string) $assignment['due_date'])) ?>.
+    <?= e($typeLabel) ?> for enrolled students in <?= e($assignment['module_code']) ?>.
+    <?php if (assignment_requires_schedule($assignment)): ?>
+        Schedule <?= e(format_assignment_schedule_summary($assignment)) ?>.
+        Supporting files may be submitted until the scheduled end time.
+    <?php else: ?>
+        Due <?= e(format_assignment_datetime((string) $assignment['due_date'])) ?>.
+    <?php endif; ?>
 </p>
 
 <div class="card shadow-sm">

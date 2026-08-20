@@ -38,6 +38,7 @@ $anchor = $resolved['anchor'];
 $tz = new DateTimeZone(APP_TIMEZONE);
 $calendarPath = $academicRoutePrefix . '/calendar/index.php';
 $showLecturer = true;
+$calendarAllowSessionOpen = true;
 
 $filterQuery = array_filter([
     'lecturer_id' => $filterLecturerId,
@@ -52,10 +53,37 @@ $sessions = list_lecture_sessions(array_merge($filterQuery, [
     'to' => $rangeTo,
 ]));
 
-$sessionsByDate = [];
+$calendarEvents = [];
 foreach ($sessions as $session) {
-    $sessionsByDate[(string) $session['session_date']][] = $session;
+    $normalized = calendar_normalize_lecture_event(
+        $session,
+        app_url($academicRoutePrefix . '/sessions/view.php?id=' . (int) $session['session_id'])
+    );
+    if ($normalized !== null) {
+        $calendarEvents[] = $normalized;
+    }
 }
+
+// Coursework: read-only. Apply lecturer/module/course filters; ignore lecture status + batch
+// (batch is session-scoped). When only a batch filter is active, still show institution coursework.
+$courseworkFilters = array_filter([
+    'lecturer_id' => $filterLecturerId,
+    'module_id' => $filterModuleId,
+    'course_id' => $filterCourseId,
+], static fn ($value): bool => $value !== null && $value !== '');
+
+foreach (list_calendar_coursework_for_institution($rangeFrom, $rangeTo, $courseworkFilters) as $activity) {
+    $normalized = calendar_normalize_coursework_event(
+        $activity,
+        app_url($academicRoutePrefix . '/assignments/view.php?id=' . (int) $activity['assignment_id'])
+    );
+    if ($normalized !== null) {
+        $calendarEvents[] = $normalized;
+    }
+}
+
+$calendarEvents = calendar_sort_events($calendarEvents);
+$eventsByDate = calendar_group_events_by_date($calendarEvents);
 
 $lecturers = list_lecturers(['status' => 'ACTIVE']);
 $courses = list_courses(['status' => 'ACTIVE']);
@@ -66,7 +94,8 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
 ?>
 
 <p class="text-muted mb-3">
-    Institution-wide dated lecture sessions. Create a session to place it on this calendar and the assigned lecturer’s My Calendar.
+    Institution-wide lecture sessions plus published Presentations, Exams and Practicals.
+    Coursework events are read-only here and do not create attendance sessions.
 </p>
 
 <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
@@ -131,7 +160,7 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
             </select>
         </div>
         <div class="col-md-2">
-            <label for="status" class="form-label">Status</label>
+            <label for="status" class="form-label">Session status</label>
             <select class="form-select" id="status" name="status">
                 <option value="">All statuses</option>
                 <?php foreach (lecture_session_statuses() as $sessionStatus): ?>

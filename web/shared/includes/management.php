@@ -1741,7 +1741,6 @@ function management_nav_items(string $role): array
             ['label' => 'Camera Management', 'href' => app_url('admin/camera.php'), 'group' => 'TEACHING', 'icon' => 'camera-video'],
             ['label' => 'Attendance Reports', 'href' => app_url('admin/attendance/reports.php'), 'group' => 'TEACHING', 'icon' => 'clipboard-check'],
             ['label' => 'Coursework Monitor', 'href' => app_url('admin/assignments/index.php'), 'group' => 'ASSESSMENT', 'icon' => 'journal-text'],
-            ['label' => 'Marks Monitor', 'href' => app_url('admin/marks/index.php'), 'group' => 'ASSESSMENT', 'icon' => 'bar-chart'],
             ['label' => 'Announcements', 'href' => app_url('admin/announcements/index.php'), 'group' => 'COMMUNICATION', 'icon' => 'megaphone'],
             ['label' => 'Events', 'href' => app_url('admin/events/index.php'), 'group' => 'COMMUNICATION', 'icon' => 'calendar2-event'],
         ],
@@ -1759,7 +1758,6 @@ function management_nav_items(string $role): array
             ['label' => 'Camera Management', 'href' => app_url('academic-staff/camera.php'), 'group' => 'TEACHING', 'icon' => 'camera-video'],
             ['label' => 'Attendance Reports', 'href' => app_url('academic-staff/attendance/reports.php'), 'group' => 'TEACHING', 'icon' => 'clipboard-check'],
             ['label' => 'Coursework Monitor', 'href' => app_url('academic-staff/assignments/index.php'), 'group' => 'ASSESSMENT', 'icon' => 'journal-text'],
-            ['label' => 'Marks Monitor', 'href' => app_url('academic-staff/marks/index.php'), 'group' => 'ASSESSMENT', 'icon' => 'bar-chart'],
             ['label' => 'Announcements', 'href' => app_url('academic-staff/announcements/index.php'), 'group' => 'COMMUNICATION', 'icon' => 'megaphone'],
             ['label' => 'Events', 'href' => app_url('academic-staff/events/index.php'), 'group' => 'COMMUNICATION', 'icon' => 'calendar2-event'],
         ],
@@ -1769,8 +1767,7 @@ function management_nav_items(string $role): array
             ['label' => 'My Calendar', 'href' => app_url('lecturer/schedules/index.php'), 'group' => 'TEACHING', 'icon' => 'calendar-event'],
             ['label' => 'Lecture Sessions', 'href' => app_url('lecturer/sessions/index.php'), 'group' => 'TEACHING', 'icon' => 'calendar-check'],
             ['label' => 'Attendance Reports', 'href' => app_url('lecturer/attendance/reports.php'), 'group' => 'TEACHING', 'icon' => 'clipboard-check'],
-            ['label' => 'Coursework Assignments', 'href' => app_url('lecturer/assignments/index.php'), 'group' => 'ACADEMIC', 'icon' => 'journal-text'],
-            ['label' => 'Module Marks', 'href' => app_url('lecturer/marks/index.php'), 'group' => 'ACADEMIC', 'icon' => 'bar-chart'],
+            ['label' => 'Coursework & Assessments', 'href' => app_url('lecturer/assignments/index.php'), 'group' => 'ACADEMIC', 'icon' => 'journal-bookmark'],
             ['label' => 'Announcements', 'href' => app_url('lecturer/announcements/index.php'), 'group' => 'COMMUNICATION', 'icon' => 'megaphone'],
             ['label' => 'Events', 'href' => app_url('lecturer/events/index.php'), 'group' => 'COMMUNICATION', 'icon' => 'calendar2-event'],
         ],
@@ -1778,7 +1775,7 @@ function management_nav_items(string $role): array
             ['label' => 'Dashboard', 'href' => app_url('student/dashboard.php'), 'group' => 'MENU', 'icon' => 'speedometer2'],
             ['label' => 'My Timetable', 'href' => app_url('student/timetable.php'), 'group' => 'MENU', 'icon' => 'calendar3'],
             ['label' => 'My Attendance', 'href' => app_url('student/attendance.php'), 'group' => 'MENU', 'icon' => 'clipboard-check'],
-            ['label' => 'My Assignments', 'href' => app_url('student/assignments/index.php'), 'group' => 'MENU', 'icon' => 'journal-text'],
+            ['label' => 'Coursework & Assessments', 'href' => app_url('student/assignments/index.php'), 'group' => 'MENU', 'icon' => 'journal-bookmark'],
             ['label' => 'My Results', 'href' => app_url('student/results/index.php'), 'group' => 'MENU', 'icon' => 'bar-chart'],
             ['label' => 'Announcements', 'href' => app_url('student/announcements/index.php'), 'group' => 'MENU', 'icon' => 'megaphone'],
             ['label' => 'Events', 'href' => app_url('student/events/index.php'), 'group' => 'MENU', 'icon' => 'calendar2-event'],
@@ -1868,7 +1865,7 @@ function count_active_students(): int
 function status_badge_class(string $status): string
 {
     return match ($status) {
-        'ACTIVE', 'ENROLLED', 'IN_PROGRESS', 'PROMOTED', 'PRESENT', 'PUBLISHED', 'SUBMITTED', 'GRADED', 'Recorded', 'Active', 'Upcoming', 'Ongoing' => 'text-bg-success',
+        'ACTIVE', 'ENROLLED', 'IN_PROGRESS', 'PROMOTED', 'PRESENT', 'PUBLISHED', 'SUBMITTED', 'GRADED', 'RECORDED', 'Recorded', 'Active', 'Upcoming', 'Ongoing' => 'text-bg-success',
         'INACTIVE', 'NOT ENROLLED', 'COMPLETED', 'DRAFT', 'NOT SUBMITTED', 'Not Recorded', 'ARCHIVED', 'Past' => 'text-bg-secondary',
         'SCHEDULED', 'OPEN' => 'text-bg-primary',
         'SUSPENDED', 'DROPPED', 'LATE', 'Expired', 'Scheduled' => 'text-bg-warning',

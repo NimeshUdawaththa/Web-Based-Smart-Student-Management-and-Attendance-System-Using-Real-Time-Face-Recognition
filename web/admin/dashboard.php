@@ -221,18 +221,8 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
                 <div class="card-body">
                     <span class="app-action-card__icon" aria-hidden="true"><i class="bi bi-journal-text"></i></span>
                     <h3 class="h6 mb-1">Coursework Monitor</h3>
-                    <p class="text-muted small">Read-only view of coursework assignments and submissions.</p>
+                    <p class="text-muted small">Read-only view of coursework and assessments.</p>
                     <a href="<?= e(app_url('admin/assignments/index.php')) ?>" class="btn btn-outline-primary btn-sm">Open</a>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-6 col-xl-3">
-            <div class="card app-action-card">
-                <div class="card-body">
-                    <span class="app-action-card__icon" aria-hidden="true"><i class="bi bi-bar-chart"></i></span>
-                    <h3 class="h6 mb-1">Marks Monitor</h3>
-                    <p class="text-muted small">Read-only view of module assessment results.</p>
-                    <a href="<?= e(app_url('admin/marks/index.php')) ?>" class="btn btn-outline-primary btn-sm">Open</a>
                 </div>
             </div>
         </div>

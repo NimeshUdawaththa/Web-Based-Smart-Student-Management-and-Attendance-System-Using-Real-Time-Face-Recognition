@@ -4,12 +4,9 @@ declare(strict_types=1);
 
 require_once dirname(__DIR__, 2) . '/shared/includes/init.php';
 require_role('LECTURER');
-$lecturer = current_lecturer_profile();
-if ($lecturer === null) {
-    set_flash('error', 'No lecturer profile is linked to this account.');
-    redirect('lecturer/dashboard.php');
-}
-$academicRoutePrefix = 'lecturer';
-$marksCanEdit = true;
-$restrictLecturerId = (int) $lecturer['lecturer_id'];
-require WEB_PATH . '/shared/pages/marks/entry.php';
+
+set_flash(
+    'info',
+    'Legacy Assessment Results entry is retired. Record Exam and Practical marks under Coursework & Assessments → Results.'
+);
+redirect('lecturer/assignments/index.php');

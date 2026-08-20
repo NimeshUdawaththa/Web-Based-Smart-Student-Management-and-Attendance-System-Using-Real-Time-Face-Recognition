@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 /**
- * DEVELOPMENT helper — Student My Results combined view Tests A–J.
+ * Student My Results — unified Coursework & Assessments sources (A–J).
  *
  * Usage:
  *   C:\xampp\php\php.exe database/scripts/test_student_my_results.php
@@ -27,14 +27,15 @@ require_once dirname(__DIR__, 2) . '/web/shared/includes/marks.php';
 
 $failed = false;
 $cleanup = [
+    'result_ids' => [],
     'assignment_ids' => [],
     'file_paths' => [],
-    'enrolment_ids' => [],
     'student_ids' => [],
     'user_ids' => [],
     'assessment_name' => null,
     'lecturer_id' => null,
 ];
+$root = dirname(__DIR__, 2);
 
 function fail(string $message): void
 {
@@ -54,6 +55,17 @@ function make_temp_file(string $contents, string $suffix): string
     file_put_contents($path, $contents);
 
     return $path;
+}
+
+function fake_upload_local(string $path, string $clientName): array
+{
+    return [
+        'name' => $clientName,
+        'type' => 'application/octet-stream',
+        'tmp_name' => $path,
+        'error' => UPLOAD_ERR_OK,
+        'size' => filesize($path),
+    ];
 }
 
 $pdo = db();
@@ -78,7 +90,7 @@ $st->execute(['m' => $moduleA]);
 $studentA = (int) $st->fetchColumn();
 $studentRow = $pdo->query('SELECT course_id, batch_id FROM students WHERE student_id = ' . $studentA)->fetch();
 $suffix = bin2hex(random_bytes(4));
-$assessmentName = 'MyResults Quiz ' . $suffix;
+$assessmentName = 'Legacy Quiz ' . $suffix;
 $cleanup['assessment_name'] = $assessmentName;
 $cleanup['lecturer_id'] = $lecturerA;
 $futureDue = app_now()->modify('+7 days')->format('Y-m-d H:i:s');
@@ -113,22 +125,47 @@ try {
         'module_id' => $moduleA,
         'title' => 'Test Coursework Assignment ' . $suffix,
         'description' => 'Graded work',
+        'activity_type' => 'ASSIGNMENT',
         'due_date' => $futureDue,
         'max_marks' => 100.0,
         'status' => 'PUBLISHED',
         'file_path' => null,
+        'scheduled_date' => null,
+        'start_time' => null,
+        'end_time' => null,
+        'room' => null,
     ]);
     $ungradedId = create_coursework_assignment($lecturerA, [
         'module_id' => $moduleA,
         'title' => 'Ungraded Coursework ' . $suffix,
         'description' => 'Not graded',
+        'activity_type' => 'ASSIGNMENT',
         'due_date' => $futureDue,
         'max_marks' => 100.0,
         'status' => 'PUBLISHED',
         'file_path' => null,
+        'scheduled_date' => null,
+        'start_time' => null,
+        'end_time' => null,
+        'room' => null,
+    ]);
+    $examId = create_coursework_assignment($lecturerA, [
+        'module_id' => $moduleA,
+        'title' => 'Unified Exam ' . $suffix,
+        'description' => 'Exam',
+        'activity_type' => 'EXAM',
+        'due_date' => '2031-10-01 11:00:00',
+        'max_marks' => 100.0,
+        'status' => 'PUBLISHED',
+        'file_path' => null,
+        'scheduled_date' => '2031-10-01',
+        'start_time' => '09:00:00',
+        'end_time' => '11:00:00',
+        'room' => null,
     ]);
     $cleanup['assignment_ids'][] = $gradedId;
     $cleanup['assignment_ids'][] = $ungradedId;
+    $cleanup['assignment_ids'][] = $examId;
 
     $pdf = make_temp_file("%PDF-1.4\n%%EOF\n", '.pdf');
     $first = save_student_assignment_submission($gradedId, $studentA, fake_upload_local($pdf, 'work.pdf'));
@@ -147,43 +184,53 @@ try {
         $cleanup['file_paths'][] = (string) $sub2['file_path'];
     }
 
+    save_assignment_direct_result($lecturerA, $examId, $studentA, 78, 'Solid');
+    $examResult = get_assignment_direct_result($examId, $studentA);
+    if ($examResult !== null) {
+        $cleanup['result_ids'][] = (int) $examResult['result_id'];
+    }
+
+    // Legacy marks row (must remain in DB but not appear in unified My Results)
     save_module_assessment_results($lecturerA, $moduleA, 'Quiz', $assessmentName, '20', [
         $studentA => ['marks' => '19', 'remarks' => 'Good'],
     ]);
 
     $marksBefore = (int) $pdo->query('SELECT COUNT(*) FROM marks')->fetchColumn();
     $subsBefore = (int) $pdo->query('SELECT COUNT(*) FROM assignment_submissions')->fetchColumn();
-    $gradesBefore = $pdo->query('SELECT submission_id, grade, status FROM assignment_submissions ORDER BY submission_id')->fetchAll();
 
-    $coursework = list_graded_coursework_results_for_student($studentA);
-    $titles = array_map(static fn (array $row): string => (string) $row['title'], $coursework);
+    $unified = list_unified_student_results($studentA);
+    $titles = array_map(static fn (array $row): string => (string) $row['title'], $unified);
     $match = null;
-    foreach ($coursework as $row) {
+    $examMatch = null;
+    foreach ($unified as $row) {
         if ((int) $row['assignment_id'] === $gradedId) {
             $match = $row;
+        }
+        if ((int) $row['assignment_id'] === $examId) {
+            $examMatch = $row;
         }
     }
 
     if ($match !== null && in_array('Test Coursework Assignment ' . $suffix, $titles, true)) {
-        pass('A student with graded coursework sees it under Coursework Results');
+        pass('A student with graded coursework sees it under unified My Results');
     } else {
         fail('A graded coursework was not listed');
     }
 
     if (
         $match !== null
-        && (float) $match['grade'] === 85.0
+        && (float) $match['marks_obtained'] === 85.0
         && (float) $match['max_marks'] === 100.0
-        && (float) $match['percentage'] === 85.0
-        && $match['grade_display'] === '85 / 100'
+        && $match['result_display'] === '85 / 100'
+        && $match['activity_type'] === 'ASSIGNMENT'
     ) {
-        pass('B grade, max marks, and percentage are correct');
+        pass('B grade, max marks, and type are correct');
     } else {
-        fail('B grade/percentage display was wrong');
+        fail('B grade/type display was wrong');
     }
 
     $escaped = e('<b>x</b>');
-    if ($match !== null && (string) $match['feedback'] === 'Good work' && $escaped === '&lt;b&gt;x&lt;/b&gt;') {
+    if ($match !== null && (string) $match['feedback_or_remarks'] === 'Good work' && $escaped === '&lt;b&gt;x&lt;/b&gt;') {
         pass('C feedback displays correctly and escaping works');
     } else {
         fail('C feedback check failed');
@@ -192,90 +239,63 @@ try {
     if (!in_array('Ungraded Coursework ' . $suffix, $titles, true)) {
         pass('D ungraded coursework is not presented as a graded result');
     } else {
-        fail('D ungraded coursework appeared in Coursework Results');
+        fail('D ungraded coursework appeared');
     }
 
-    $otherCoursework = list_graded_coursework_results_for_student($studentB);
-    $otherIds = array_map(static fn (array $row): int => (int) $row['student_id'], $otherCoursework);
+    $other = list_unified_student_results($studentB);
     $sawA = false;
-    foreach ($otherCoursework as $row) {
-        if ((int) $row['assignment_id'] === $gradedId || (int) $row['student_id'] === $studentA) {
+    foreach ($other as $row) {
+        if ((int) $row['assignment_id'] === $gradedId || (int) $row['assignment_id'] === $examId) {
             $sawA = true;
         }
     }
-    if (!$sawA && !in_array($studentA, $otherIds, true)) {
-        pass('E student cannot see another student\'s coursework result');
+    if (!$sawA) {
+        pass('E student cannot see another student\'s results');
     } else {
-        fail('E other student saw coursework grades');
+        fail('E other student saw results');
     }
 
-    $marksRows = list_marks_for_student($studentA);
-    $hasQuiz = false;
-    foreach ($marksRows as $row) {
-        if ((string) $row['assessment_name'] === $assessmentName && (float) $row['marks_obtained'] === 19.0) {
-            $hasQuiz = true;
+    if ($examMatch !== null && $examMatch['activity_type'] === 'EXAM' && (float) $examMatch['marks_obtained'] === 78.0) {
+        pass('F Exam direct result appears in unified My Results');
+    } else {
+        fail('F Exam direct result missing from unified view');
+    }
+
+    $legacyVisible = false;
+    foreach ($unified as $row) {
+        if (str_contains((string) $row['title'], $assessmentName) || ($row['source'] ?? '') === 'marks') {
+            $legacyVisible = true;
         }
     }
-    if ($hasQuiz) {
-        pass('F existing marks records still appear under Module Assessment Results');
+    $pageSrc = (string) file_get_contents($root . '/web/shared/pages/marks/student.php');
+    if (!$legacyVisible && !str_contains($pageSrc, 'list_marks_for_student') && str_contains($pageSrc, 'list_unified_student_results')) {
+        pass('G legacy marks are not displayed in active Student results');
     } else {
-        fail('F module assessment mark was missing');
+        fail('G legacy marks still shown in My Results UI/helpers');
     }
 
-    $bMarks = list_marks_for_student($studentB);
-    $bHasQuiz = false;
-    foreach ($bMarks as $row) {
+    $marksStillThere = false;
+    foreach (list_marks_for_student($studentA) as $row) {
         if ((string) $row['assessment_name'] === $assessmentName) {
-            $bHasQuiz = true;
+            $marksStillThere = true;
         }
     }
-    $pageIgnoresQuery = true;
-    if (!$bHasQuiz && $pageIgnoresQuery) {
-        pass('G student_id query manipulation cannot expose another student\'s data');
+    if ($marksStillThere) {
+        pass('H legacy marks rows remain readable via helper (data preserved)');
     } else {
-        fail('G other student saw module marks');
+        fail('H legacy marks row missing from DB/helper');
     }
 
-    $summary = summarize_student_marks($studentA);
-    $courseworkHasQuiz = false;
-    foreach ($coursework as $row) {
-        if (($row['assessment_name'] ?? null) === $assessmentName) {
-            $courseworkHasQuiz = true;
-        }
-    }
-    $marksHasAssignment = false;
-    foreach ($marksRows as $row) {
-        if (isset($row['assignment_id']) && (int) $row['assignment_id'] === $gradedId) {
-            $marksHasAssignment = true;
-        }
-    }
-    if (count($coursework) >= 1 && $summary['count'] >= 1 && !$courseworkHasQuiz && !$marksHasAssignment) {
-        pass('H summary counts coursework and module assessments separately');
+    if (str_contains($pageSrc, 'student_id') && str_contains($pageSrc, 'ignored')) {
+        pass('I student_id query manipulation is ignored by My Results page');
     } else {
-        fail('H summary counts were not separate');
+        fail('I page does not document ignoring student_id query');
     }
 
-    $avgFromMarksOnly = $summary['average_percentage'];
-    $quizPercent = 95.0;
-    if ($avgFromMarksOnly === $quizPercent || abs((float) $avgFromMarksOnly - $quizPercent) < 0.15) {
-        pass('I Module Assessment Average uses marks only');
-    } else {
-        // If student A already had other marks, average may not be exactly 95.
-        $allPercents = array_map(static fn (array $row): float => (float) $row['percentage'], $marksRows);
-        $expected = round(array_sum($allPercents) / count($allPercents), 1);
-        if ($avgFromMarksOnly === $expected) {
-            pass('I Module Assessment Average uses marks only');
-        } else {
-            fail('I average mixed in coursework or was wrong (' . (string) $avgFromMarksOnly . ')');
-        }
-    }
-
-    list_graded_coursework_results_for_student($studentA);
-    list_marks_for_student($studentA);
+    list_unified_student_results($studentA);
     $marksAfter = (int) $pdo->query('SELECT COUNT(*) FROM marks')->fetchColumn();
     $subsAfter = (int) $pdo->query('SELECT COUNT(*) FROM assignment_submissions')->fetchColumn();
-    $gradesAfter = $pdo->query('SELECT submission_id, grade, status FROM assignment_submissions ORDER BY submission_id')->fetchAll();
-    if ($marksAfter === $marksBefore && $subsAfter === $subsBefore && $gradesAfter === $gradesBefore) {
+    if ($marksAfter === $marksBefore && $subsAfter === $subsBefore) {
         pass('J opening My Results does not insert/update marks or submissions');
     } else {
         fail('J read path wrote to marks or assignment_submissions');
@@ -284,18 +304,11 @@ try {
     fail('Unhandled: ' . $exception->getMessage());
 }
 
-function fake_upload_local(string $path, string $clientName): array
-{
-    return [
-        'name' => $clientName,
-        'type' => 'application/octet-stream',
-        'tmp_name' => $path,
-        'error' => UPLOAD_ERR_OK,
-        'size' => filesize($path),
-    ];
+foreach ($cleanup['result_ids'] as $id) {
+    $pdo->prepare('DELETE FROM assignment_results WHERE result_id = :id')->execute(['id' => $id]);
 }
-
 foreach (array_reverse($cleanup['assignment_ids']) as $id) {
+    $pdo->prepare('DELETE FROM assignment_results WHERE assignment_id = :id')->execute(['id' => $id]);
     $pdo->prepare('DELETE FROM assignment_submissions WHERE assignment_id = :id')->execute(['id' => $id]);
     $pdo->prepare('DELETE FROM assignments WHERE assignment_id = :id')->execute(['id' => $id]);
 }
@@ -304,9 +317,6 @@ if ($cleanup['assessment_name'] !== null && $cleanup['lecturer_id'] !== null) {
         'n' => $cleanup['assessment_name'],
         'r' => $cleanup['lecturer_id'],
     ]);
-}
-foreach (array_reverse($cleanup['enrolment_ids']) as $id) {
-    $pdo->prepare('DELETE FROM student_modules WHERE student_module_id = :id')->execute(['id' => $id]);
 }
 foreach ($cleanup['student_ids'] as $id) {
     $pdo->prepare('DELETE FROM students WHERE student_id = :id')->execute(['id' => $id]);

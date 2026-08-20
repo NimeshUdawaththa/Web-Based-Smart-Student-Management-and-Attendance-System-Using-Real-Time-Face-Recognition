@@ -36,6 +36,7 @@ $tz = new DateTimeZone(APP_TIMEZONE);
 $calendarPath = $academicRoutePrefix . '/schedules/index.php';
 $showLecturer = false;
 $filterQueryForNav = [];
+$calendarAllowSessionOpen = true;
 
 $sessions = list_lecture_sessions([
     'lecturer_id' => $restrictLecturerId,
@@ -43,16 +44,37 @@ $sessions = list_lecture_sessions([
     'to' => $rangeTo,
 ]);
 
-$sessionsByDate = [];
+$calendarEvents = [];
 foreach ($sessions as $session) {
-    $sessionsByDate[(string) $session['session_date']][] = $session;
+    $normalized = calendar_normalize_lecture_event(
+        $session,
+        app_url($academicRoutePrefix . '/sessions/view.php?id=' . (int) $session['session_id'])
+    );
+    if ($normalized !== null) {
+        $calendarEvents[] = $normalized;
+    }
 }
+
+foreach (list_calendar_coursework_for_lecturer($restrictLecturerId, $rangeFrom, $rangeTo) as $activity) {
+    $normalized = calendar_normalize_coursework_event(
+        $activity,
+        app_url($academicRoutePrefix . '/assignments/view.php?id=' . (int) $activity['assignment_id'])
+    );
+    if ($normalized !== null) {
+        $calendarEvents[] = $normalized;
+    }
+}
+
+$calendarEvents = calendar_sort_events($calendarEvents);
+$eventsByDate = calendar_group_events_by_date($calendarEvents);
 
 require INCLUDES_PATH . '/dashboard-layout-start.php';
 ?>
 
 <p class="text-muted mb-4">
-    Dated lecture sessions assigned to you. Statuses update when this page is opened.
+    Your lecture sessions plus scheduled Presentations, Exams and Practicals for modules you teach.
+    Assignments with due dates appear under Coursework &amp; Assessments (not on this calendar).
+    Coursework events do not create attendance sessions.
 </p>
 
 <?php require WEB_PATH . '/shared/pages/calendar/_render.php';

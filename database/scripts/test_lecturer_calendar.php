@@ -118,11 +118,13 @@ $timeBase = ((int) date('i')) % 40;
  */
 function calendar_test_slot(int $index): array
 {
-    $hour = 6 + intdiv($index, 2);
-    $minute = ($index % 2) * 30;
+    // Keep slots inside a safe daytime window (avoid hour overflow past 23:59).
+    $slot = $index % 24;
+    $hour = 7 + intdiv($slot, 2);
+    $minute = ($slot % 2) * 30;
     $start = sprintf('%02d:%02d', $hour, $minute);
-    $endHour = $hour + 1;
-    $endMinute = $minute + 30;
+    $endMinute = $minute + 45;
+    $endHour = $hour;
     if ($endMinute >= 60) {
         $endHour++;
         $endMinute -= 60;

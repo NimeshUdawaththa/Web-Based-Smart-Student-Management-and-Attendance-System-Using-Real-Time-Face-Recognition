@@ -137,7 +137,7 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
 ?>
 
 <div class="mb-3">
-    <a href="<?= e(app_url($academicRoutePrefix . '/marks/index.php')) ?>">&larr; <?= $marksCanEdit ? 'Module Marks' : 'Marks Monitor' ?></a>
+    <a href="<?= e(app_url($academicRoutePrefix . '/marks/index.php')) ?>">&larr; <?= $marksCanEdit ? 'Assessment Results' : 'Marks Monitor' ?></a>
 </div>
 
 <?php if ($errors !== []): ?>

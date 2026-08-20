@@ -24,6 +24,11 @@ if ($submission === null || $assignment === null || $student === null) {
     redirect($academicRoutePrefix . '/assignments/index.php');
 }
 
+if (!assignment_requires_submission($assignment)) {
+    set_flash('error', 'Grading via submissions is only available for Assignment and Presentation activities.');
+    redirect($academicRoutePrefix . '/assignments/results.php?id=' . (int) $assignment['assignment_id']);
+}
+
 if ($courseworkCanEdit) {
     if ($restrictLecturerId === null || !lecturer_can_grade_submission($restrictLecturerId, $assignment, $submission)) {
         deny_access();

@@ -184,32 +184,38 @@ Processed attendance decision for one student in one session.
 
 ### 15. `assignments`
 
-Coursework set by a lecturer on a module.
+Coursework & Assessments parent (Assignment / Presentation / Exam / Practical).
 
 - **Primary key:** `assignment_id`
 - **Foreign keys:** `module_id` → `modules.module_id`, `lecturer_id` → `lecturers.lecturer_id`
-- **Notes:** `file_path` is an optional uploaded brief. `max_marks` is `DECIMAL(8,2)`.
+- **activity_type:** `ASSIGNMENT` | `PRESENTATION` | `EXAM` | `PRACTICAL` (default `ASSIGNMENT`)
+- **due_date:** Assignment submission deadline. For Presentation/Exam/Practical, stored as the scheduled end datetime for NOT NULL compatibility — UI shows schedule fields, not a misleading Due label for those types.
+- **scheduled_date / start_time / end_time / room:** Required for Presentation / Exam / Practical (room optional). NULL for Assignment.
+- **Notes:** `file_path` is an optional uploaded brief for Assignment/Presentation. `max_marks` is `DECIMAL(8,2)`. Not stored as `lecture_sessions`.
 
 ### 16. `assignment_submissions`
 
-Student work against an assignment.
+Student file work against Assignment/Presentation only.
 
 - **Primary key:** `submission_id`
 - **Foreign keys:** `assignment_id` → `assignments.assignment_id`, `student_id` → `students.student_id`
 - **Unique:** `(assignment_id, student_id)` — one submission row per student per assignment
-- **Notes:** A later resubmission should update this row. `grade` is nullable until marked.
+- **Notes:** A later resubmission should update this row. `grade` is nullable until marked. `file_path` is required.
 
-### 17. `marks`
+### 16b. `assignment_results`
 
-Recorded assessment results for a student on a module.
+Direct lecturer-entered marks for Exam/Practical. No row = Not Recorded.
 
-- **Primary key:** `mark_id`
-- **Foreign keys:**
-  - `student_id` → `students.student_id`
-  - `module_id` → `modules.module_id`
-  - `recorded_by` → `lecturers.lecturer_id`
-- **Check:** `0 <= marks_obtained <= max_marks` and `max_marks > 0`
-- **Notes:** `assessment_type` is a string (assignment, quiz, exam, and similar) so new types can be added without a schema change.
+- **Primary key:** `result_id`
+- **Unique:** `(assignment_id, student_id)`
+- **Foreign keys:** assignment, student, recorded_by → lecturers (RESTRICT deletes)
+
+### 17. `marks` (legacy / inactive)
+
+Historical module assessment ledger. **Not used by active UI.**
+
+- Active grading: `assignment_submissions` (Assignment/Presentation) and `assignment_results` (Exam/Practical)
+- Keep the table and rows for recovery/history; do not drop
 
 ### 18. `announcements`
 
@@ -247,6 +253,7 @@ Activity history for security and traceability.
 | `face_profiles` | `student_id` | One face profile per student |
 | `attendance_records` | `(student_id, session_id)` | One processed attendance result per session |
 | `assignment_submissions` | `(assignment_id, student_id)` | One submission record per assignment |
+| `assignment_results` | `(assignment_id, student_id)` | One direct result per student per Exam/Practical |
 
 ## Major relationships
 

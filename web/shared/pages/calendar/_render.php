@@ -18,20 +18,29 @@ if (!defined('APP_STARTED')) {
 /** @var list<string> $gridDays */
 /** @var DateTimeImmutable $anchor */
 /** @var DateTimeZone $tz */
-/** @var array<string, list<array<string, mixed>>> $sessionsByDate */
-/** @var list<array<string, mixed>> $sessions */
+/** @var list<array<string, mixed>> $calendarEvents */
+$calendarEvents = $calendarEvents ?? [];
+/** @var array<string, list<array<string, mixed>>> $eventsByDate */
+$eventsByDate = $eventsByDate ?? calendar_group_events_by_date($calendarEvents);
 /** @var bool $showLecturer */
 $showLecturer = $showLecturer ?? false;
 /** @var array<string, scalar> $filterQueryForNav */
 $filterQueryForNav = $filterQueryForNav ?? [];
+/** @var bool $calendarAllowSessionOpen */
+$calendarAllowSessionOpen = $calendarAllowSessionOpen ?? true;
 
-$emptyFilterMessage = 'No lecture sessions match the selected filters for this period.';
-
+$emptyFilterMessage = 'No events match the selected filters for this period.';
 $statusLegend = [
     'SCHEDULED' => 'Scheduled',
     'IN_PROGRESS' => 'In Progress',
     'COMPLETED' => 'Completed',
     'CANCELLED' => 'Cancelled',
+];
+$typeLegend = [
+    'LECTURE' => 'Lecture',
+    'PRESENTATION' => 'Presentation',
+    'EXAM' => 'Exam',
+    'PRACTICAL' => 'Practical',
 ];
 ?>
 
@@ -51,7 +60,15 @@ $statusLegend = [
     </div>
 </div>
 
-<div class="app-cal-legend mb-3" aria-label="Session status legend">
+<div class="app-cal-legend mb-2" aria-label="Event type legend">
+    <?php foreach ($typeLegend as $typeKey => $typeLabel): ?>
+        <span class="app-cal-legend__item">
+            <span class="app-cal-legend__swatch <?= e(calendar_event_type_class($typeKey)) ?>" aria-hidden="true"></span>
+            <span class="app-cal-legend__label"><?= e($typeLabel) ?></span>
+        </span>
+    <?php endforeach; ?>
+</div>
+<div class="app-cal-legend mb-3" aria-label="Lecture session status legend">
     <?php foreach ($statusLegend as $statusKey => $statusLabel): ?>
         <span class="app-cal-legend__item">
             <span class="app-cal-legend__swatch <?= e(calendar_session_status_class($statusKey)) ?>" aria-hidden="true"></span>
@@ -60,55 +77,101 @@ $statusLegend = [
     <?php endforeach; ?>
 </div>
 
-<?php if ($sessions === []): ?>
+<?php if ($calendarEvents === []): ?>
     <div class="alert alert-light border mb-4">
         <?php if ($filterQueryForNav !== []): ?>
             <?= e($emptyFilterMessage) ?>
         <?php elseif ($view === 'today'): ?>
-            No lecture sessions scheduled for this day.
+            No lectures or scheduled assessments for this day.
         <?php elseif ($view === 'week'): ?>
-            No lecture sessions scheduled this week.
+            No lectures or scheduled assessments this week.
         <?php else: ?>
-            No lecture sessions scheduled this month.
+            No lectures or scheduled assessments this month.
         <?php endif; ?>
     </div>
 <?php endif; ?>
 
+<?php
+$renderEvent = static function (array $event, bool $cardLayout, bool $showLecturer, bool $allowSessionOpen): void {
+    $type = (string) ($event['event_type'] ?? 'LECTURE');
+    $typeLabel = calendar_event_type_label($type);
+    $timeLabel = format_time_display($event['start_time']) . '–' . format_time_display($event['end_time']);
+    $typeClass = calendar_event_type_class($type);
+    $statusClass = !empty($event['is_lecture'])
+        ? calendar_session_status_class((string) $event['status'])
+        : '';
+    $classes = trim('lecturer-cal-event ' . ($cardLayout ? 'lecturer-cal-event-card w-100 text-start border rounded p-3 bg-white ' : 'w-100 text-start border-0 rounded px-2 py-1 mb-1 small ') . $typeClass . ' ' . $statusClass);
+    $detailUrl = trim((string) ($event['detail_url'] ?? ''));
+    $isLecture = !empty($event['is_lecture']);
+
+    if ($isLecture && $allowSessionOpen) {
+        ?>
+        <button type="button"
+                class="<?= e($classes) ?>"
+                data-bs-toggle="modal"
+                data-bs-target="#sessionDetailModal"
+                data-session-id="<?= e((string) $event['source_id']) ?>"
+                data-module-code="<?= e((string) $event['module_code']) ?>"
+                data-module-name="<?= e((string) $event['module_name']) ?>"
+                data-batch-name="<?= e((string) $event['batch_name']) ?>"
+                data-lecturer-name="<?= e((string) $event['lecturer_name']) ?>"
+                data-session-date="<?= e((string) $event['event_date']) ?>"
+                data-scheduled-start="<?= e(format_time_display($event['start_time'])) ?>"
+                data-scheduled-end="<?= e(format_time_display($event['end_time'])) ?>"
+                data-room="<?= e((string) $event['location']) ?>"
+                data-status="<?= e((string) $event['status']) ?>">
+            <div class="fw-semibold text-truncate"><?= e($typeLabel) ?></div>
+            <div class="text-truncate"><?= e((string) $event['module_code'] . ' · ' . (string) $event['title']) ?></div>
+            <?php if ($showLecturer && (string) $event['lecturer_name'] !== ''): ?>
+                <div class="text-truncate"><?= e((string) $event['lecturer_name']) ?></div>
+            <?php endif; ?>
+            <div class="text-muted text-truncate"><?= e($timeLabel) ?></div>
+            <div class="app-cal-event-status small"><?= e((string) $event['status']) ?></div>
+        </button>
+        <?php
+        return;
+    }
+
+    if ($detailUrl !== '') {
+        ?>
+        <a href="<?= e($detailUrl) ?>" class="<?= e($classes) ?> text-decoration-none text-body">
+            <div class="fw-semibold text-truncate"><?= e($typeLabel) ?></div>
+            <div class="text-truncate"><?= e((string) $event['module_code'] . ' · ' . (string) $event['title']) ?></div>
+            <?php if ($showLecturer && (string) $event['lecturer_name'] !== ''): ?>
+                <div class="text-truncate"><?= e((string) $event['lecturer_name']) ?></div>
+            <?php endif; ?>
+            <div class="text-muted text-truncate"><?= e($timeLabel) ?></div>
+            <?php if ((string) $event['location'] !== ''): ?>
+                <div class="text-muted text-truncate small"><?= e((string) $event['location']) ?></div>
+            <?php endif; ?>
+            <div class="app-cal-event-status small"><?= e((string) $event['status']) ?></div>
+            <span class="visually-hidden"><?= e($typeLabel . ' details') ?></span>
+        </a>
+        <?php
+        return;
+    }
+
+    ?>
+    <div class="<?= e($classes) ?>">
+        <div class="fw-semibold text-truncate"><?= e($typeLabel) ?></div>
+        <div class="text-truncate"><?= e((string) $event['module_code'] . ' · ' . (string) $event['title']) ?></div>
+        <div class="text-muted text-truncate"><?= e($timeLabel) ?></div>
+        <div class="app-cal-event-status small"><?= e((string) $event['status']) ?></div>
+    </div>
+    <?php
+};
+?>
+
 <?php if ($view === 'today'): ?>
     <div class="card shadow-sm">
         <div class="card-body">
-            <?php if (($sessionsByDate[$anchorDate] ?? []) === []): ?>
-                <p class="text-muted mb-0"><?= $filterQueryForNav !== [] ? e($emptyFilterMessage) : 'No sessions today.' ?></p>
+            <?php if (($eventsByDate[$anchorDate] ?? []) === []): ?>
+                <p class="text-muted mb-0"><?= $filterQueryForNav !== [] ? e($emptyFilterMessage) : 'No events today.' ?></p>
             <?php else: ?>
                 <div class="row g-3">
-                    <?php foreach ($sessionsByDate[$anchorDate] as $session): ?>
-                        <?php
-                        $timeLabel = format_time_display($session['scheduled_start']) . '–' . format_time_display($session['scheduled_end']);
-                        $lecturerName = calendar_lecturer_display_name($session);
-                        ?>
+                    <?php foreach ($eventsByDate[$anchorDate] as $event): ?>
                         <div class="col-md-6 col-lg-4">
-                            <button type="button"
-                                    class="lecturer-cal-event lecturer-cal-event-card w-100 text-start border rounded p-3 bg-white <?= e(calendar_session_status_class((string) $session['status'])) ?>"
-                                    data-bs-toggle="modal"
-                                    data-bs-target="#sessionDetailModal"
-                                    data-session-id="<?= e((string) $session['session_id']) ?>"
-                                    data-module-code="<?= e((string) $session['module_code']) ?>"
-                                    data-module-name="<?= e((string) $session['module_name']) ?>"
-                                    data-batch-name="<?= e((string) $session['batch_name']) ?>"
-                                    data-lecturer-name="<?= e($lecturerName) ?>"
-                                    data-session-date="<?= e((string) $session['session_date']) ?>"
-                                    data-scheduled-start="<?= e(format_time_display($session['scheduled_start'])) ?>"
-                                    data-scheduled-end="<?= e(format_time_display($session['scheduled_end'])) ?>"
-                                    data-room="<?= e((string) ($session['room'] ?? '')) ?>"
-                                    data-status="<?= e((string) $session['status']) ?>">
-                                <div class="fw-semibold"><?= e((string) $session['module_code']) ?></div>
-                                <div class="small"><?= e((string) $session['batch_name']) ?></div>
-                                <?php if ($showLecturer): ?>
-                                    <div class="small"><?= e($lecturerName) ?></div>
-                                <?php endif; ?>
-                                <div class="small text-muted"><?= e($timeLabel) ?></div>
-                                <span class="badge mt-2 <?= e(status_badge_class((string) $session['status'])) ?>"><?= e((string) $session['status']) ?></span>
-                            </button>
+                            <?php $renderEvent($event, true, $showLecturer, $calendarAllowSessionOpen); ?>
                         </div>
                     <?php endforeach; ?>
                 </div>
@@ -140,7 +203,7 @@ $statusLegend = [
                                 $dayDate = DateTimeImmutable::createFromFormat('!Y-m-d', $dayKey, $tz);
                                 $isCurrentMonth = $view !== 'month' || ($dayDate instanceof DateTimeImmutable && $dayDate->format('n') === $anchor->format('n'));
                                 $isToday = $dayKey === $today;
-                                $daySessions = $sessionsByDate[$dayKey] ?? [];
+                                $dayEvents = $eventsByDate[$dayKey] ?? [];
                                 ?>
                                 <td class="lecturer-cal-cell align-top <?= $isCurrentMonth ? '' : 'lecturer-cal-cell--muted' ?><?= $isToday ? ' lecturer-cal-cell--today' : '' ?>">
                                     <div class="d-flex justify-content-between align-items-start mb-1">
@@ -148,33 +211,8 @@ $statusLegend = [
                                         <?php if ($isToday): ?><span class="badge text-bg-primary">Today</span><?php endif; ?>
                                     </div>
                                     <div class="lecturer-cal-events">
-                                        <?php foreach ($daySessions as $session): ?>
-                                            <?php
-                                            $timeLabel = format_time_display($session['scheduled_start']) . '–' . format_time_display($session['scheduled_end']);
-                                            $lecturerName = calendar_lecturer_display_name($session);
-                                            ?>
-                                            <button type="button"
-                                                    class="lecturer-cal-event w-100 text-start border-0 rounded px-2 py-1 mb-1 small <?= e(calendar_session_status_class((string) $session['status'])) ?>"
-                                                    data-bs-toggle="modal"
-                                                    data-bs-target="#sessionDetailModal"
-                                                    data-session-id="<?= e((string) $session['session_id']) ?>"
-                                                    data-module-code="<?= e((string) $session['module_code']) ?>"
-                                                    data-module-name="<?= e((string) $session['module_name']) ?>"
-                                                    data-batch-name="<?= e((string) $session['batch_name']) ?>"
-                                                    data-lecturer-name="<?= e($lecturerName) ?>"
-                                                    data-session-date="<?= e((string) $session['session_date']) ?>"
-                                                    data-scheduled-start="<?= e(format_time_display($session['scheduled_start'])) ?>"
-                                                    data-scheduled-end="<?= e(format_time_display($session['scheduled_end'])) ?>"
-                                                    data-room="<?= e((string) ($session['room'] ?? '')) ?>"
-                                                    data-status="<?= e((string) $session['status']) ?>">
-                                                <div class="fw-semibold text-truncate"><?= e((string) $session['module_code']) ?></div>
-                                                <div class="text-truncate"><?= e((string) $session['batch_name']) ?></div>
-                                                <?php if ($showLecturer): ?>
-                                                    <div class="text-truncate"><?= e($lecturerName) ?></div>
-                                                <?php endif; ?>
-                                                <div class="text-muted text-truncate"><?= e($timeLabel) ?></div>
-                                                <div class="app-cal-event-status small"><?= e((string) $session['status']) ?></div>
-                                            </button>
+                                        <?php foreach ($dayEvents as $event): ?>
+                                            <?php $renderEvent($event, false, $showLecturer, $calendarAllowSessionOpen); ?>
                                         <?php endforeach; ?>
                                     </div>
                                 </td>
@@ -187,6 +225,7 @@ $statusLegend = [
     </div>
 <?php endif; ?>
 
+<?php if ($calendarAllowSessionOpen): ?>
 <div class="modal fade" id="sessionDetailModal" tabindex="-1" aria-labelledby="sessionDetailModalLabel" aria-hidden="true">
     <div class="modal-dialog">
         <div class="modal-content">
@@ -280,5 +319,6 @@ $statusLegend = [
     });
 })();
 </script>
+<?php endif; ?>
 
 <?php require INCLUDES_PATH . '/dashboard-layout-end.php'; ?>
