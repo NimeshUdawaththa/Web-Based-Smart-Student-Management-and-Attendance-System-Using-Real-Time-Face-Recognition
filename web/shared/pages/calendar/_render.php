@@ -26,22 +26,38 @@ $showLecturer = $showLecturer ?? false;
 $filterQueryForNav = $filterQueryForNav ?? [];
 
 $emptyFilterMessage = 'No lecture sessions match the selected filters for this period.';
+
+$statusLegend = [
+    'SCHEDULED' => 'Scheduled',
+    'IN_PROGRESS' => 'In Progress',
+    'COMPLETED' => 'Completed',
+    'CANCELLED' => 'Cancelled',
+];
 ?>
 
-<div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
-    <div class="btn-group" role="group" aria-label="Calendar view">
+<div class="app-cal-toolbar d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+    <div class="btn-group app-cal-toolbar__views" role="group" aria-label="Calendar view">
         <a href="<?= e(calendar_url($calendarPath, 'month', $anchorDate, $filterQueryForNav)) ?>" class="btn btn-sm <?= $view === 'month' ? 'btn-primary' : 'btn-outline-primary' ?>">Month</a>
         <a href="<?= e(calendar_url($calendarPath, 'week', $anchorDate, $filterQueryForNav)) ?>" class="btn btn-sm <?= $view === 'week' ? 'btn-primary' : 'btn-outline-primary' ?>">Week</a>
         <a href="<?= e(calendar_url($calendarPath, 'today', $today, $filterQueryForNav)) ?>" class="btn btn-sm <?= $view === 'today' ? 'btn-primary' : 'btn-outline-primary' ?>">Today</a>
     </div>
-    <div class="d-flex align-items-center gap-2">
-        <a href="<?= e(calendar_url($calendarPath, $view, $prevAnchor, $filterQueryForNav)) ?>" class="btn btn-sm btn-outline-secondary" aria-label="Previous">&larr;</a>
-        <strong class="text-nowrap"><?= e($heading) ?></strong>
-        <a href="<?= e(calendar_url($calendarPath, $view, $nextAnchor, $filterQueryForNav)) ?>" class="btn btn-sm btn-outline-secondary" aria-label="Next">&rarr;</a>
+    <div class="app-cal-toolbar__nav d-flex align-items-center gap-2 flex-wrap">
+        <a href="<?= e(calendar_url($calendarPath, $view, $prevAnchor, $filterQueryForNav)) ?>" class="btn btn-sm btn-outline-secondary" aria-label="Previous period">&larr;</a>
+        <strong class="app-cal-toolbar__heading text-nowrap"><?= e($heading) ?></strong>
+        <a href="<?= e(calendar_url($calendarPath, $view, $nextAnchor, $filterQueryForNav)) ?>" class="btn btn-sm btn-outline-secondary" aria-label="Next period">&rarr;</a>
         <?php if ($anchorDate !== $today): ?>
             <a href="<?= e(calendar_url($calendarPath, $view, $today, $filterQueryForNav)) ?>" class="btn btn-sm btn-outline-primary">Go to today</a>
         <?php endif; ?>
     </div>
+</div>
+
+<div class="app-cal-legend mb-3" aria-label="Session status legend">
+    <?php foreach ($statusLegend as $statusKey => $statusLabel): ?>
+        <span class="app-cal-legend__item">
+            <span class="app-cal-legend__swatch <?= e(calendar_session_status_class($statusKey)) ?>" aria-hidden="true"></span>
+            <span class="app-cal-legend__label"><?= e($statusLabel) ?></span>
+        </span>
+    <?php endforeach; ?>
 </div>
 
 <?php if ($sessions === []): ?>
@@ -151,12 +167,13 @@ $emptyFilterMessage = 'No lecture sessions match the selected filters for this p
                                                     data-scheduled-end="<?= e(format_time_display($session['scheduled_end'])) ?>"
                                                     data-room="<?= e((string) ($session['room'] ?? '')) ?>"
                                                     data-status="<?= e((string) $session['status']) ?>">
-                                                <div class="fw-semibold"><?= e((string) $session['module_code']) ?></div>
-                                                <div><?= e((string) $session['batch_name']) ?></div>
+                                                <div class="fw-semibold text-truncate"><?= e((string) $session['module_code']) ?></div>
+                                                <div class="text-truncate"><?= e((string) $session['batch_name']) ?></div>
                                                 <?php if ($showLecturer): ?>
-                                                    <div><?= e($lecturerName) ?></div>
+                                                    <div class="text-truncate"><?= e($lecturerName) ?></div>
                                                 <?php endif; ?>
-                                                <div class="text-muted"><?= e($timeLabel) ?></div>
+                                                <div class="text-muted text-truncate"><?= e($timeLabel) ?></div>
+                                                <div class="app-cal-event-status small"><?= e((string) $session['status']) ?></div>
                                             </button>
                                         <?php endforeach; ?>
                                     </div>

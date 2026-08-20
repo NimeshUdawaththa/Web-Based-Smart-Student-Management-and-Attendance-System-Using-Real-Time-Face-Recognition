@@ -1595,11 +1595,392 @@ form.app-filter-card > .card-body {
     }
 }
 
-a:focus-visible,
-.btn:focus-visible,
-.form-control:focus-visible,
-.form-select:focus-visible,
-.nav-link:focus-visible {
-    outline: 2px solid rgba(var(--ams-primary-rgb), 0.65);
-    outline-offset: 2px;
+/* =============================================================================
+   Phase 5 — Auth entry, calendar polish, final responsive consistency
+   ============================================================================= */
+
+.app-auth-body {
+    min-height: 100vh;
+    margin: 0;
+    padding: 0;
+    overflow-x: hidden;
+    background: var(--ams-bg);
+    color: var(--ams-text);
+}
+
+.app-auth-main {
+    width: 100%;
+    max-width: none;
+    min-height: 100vh;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.app-auth-alert {
+    max-width: 52rem;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.app-auth {
+    flex: 1 1 auto;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0;
+    width: 100%;
+    max-width: none;
+    min-height: 100vh;
+    margin: 0;
+    border-radius: 0;
+    overflow: hidden;
+}
+
+.app-auth__panel {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 2.75rem 2.5rem;
+    min-width: 0;
+    min-height: 100%;
+}
+
+.app-auth__panel--brand {
+    background: linear-gradient(165deg, #0b5ed7 0%, #0a58ca 48%, #084298 100%);
+    color: #fff;
+}
+
+.app-auth__panel--form {
+    background: linear-gradient(180deg, #f4f6f9 0%, #eef2f7 100%);
+}
+
+.app-auth__brand {
+    max-width: 430px;
+    width: 100%;
+    animation: app-auth-fade-up 0.6s ease-out both;
+}
+
+.app-auth__mark {
+    width: 3rem;
+    height: 3rem;
+    border-radius: var(--ams-radius);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.16);
+    font-size: 1.35rem;
+    margin-bottom: 1rem;
+    will-change: transform;
+    animation: app-auth-mark-float 3.5s ease-in-out infinite;
+}
+
+.app-auth__eyebrow {
+    margin: 0 0 0.35rem;
+    font-size: 0.8rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    opacity: 0.9;
+}
+
+.app-auth__title {
+    margin: 0 0 0.75rem;
+    font-size: clamp(1.4rem, 2vw, 1.85rem);
+    font-weight: 700;
+    line-height: 1.25;
+}
+
+.app-auth__lead {
+    margin: 0;
+    font-size: 1rem;
+    line-height: 1.55;
+    opacity: 0.92;
+}
+
+.app-auth__card {
+    width: min(500px, calc(100% - 80px));
+    max-width: 500px;
+    border: 1px solid var(--ams-border) !important;
+    border-radius: 1rem;
+    background: var(--ams-surface);
+    box-shadow: var(--ams-shadow-hover);
+    animation: app-auth-fade-up 0.65s ease-out 0.12s both;
+}
+
+.app-auth__card .btn-primary {
+    transition: background-color var(--ams-transition), border-color var(--ams-transition),
+        box-shadow var(--ams-transition);
+}
+
+.app-auth__card .btn-primary:hover {
+    box-shadow: 0 0.3rem 0.7rem rgba(var(--ams-primary-rgb), 0.28);
+}
+
+.app-auth__card .card-body {
+    padding: 2.625rem 2.5rem; /* ~42px / 40px */
+}
+
+.app-auth__card-title {
+    margin: 0;
+    font-size: 1.5rem;
+    font-weight: 700;
+    line-height: 1.25;
+    white-space: nowrap;
+}
+
+.app-auth__card .form-control,
+.app-auth__card .input-group,
+.app-auth__card .btn {
+    width: 100%;
+}
+
+.app-auth__card .input-group {
+    display: flex;
+    flex-wrap: nowrap;
+}
+
+.app-auth__card .input-group > .form-control {
+    width: 1%;
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.app-auth__card .input-group > .btn {
+    width: auto;
+    flex: 0 0 auto;
+}
+
+.app-auth__footnote {
+    max-width: none;
+    line-height: 1.45;
+}
+
+.app-auth__db-status {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+}
+
+.app-auth__db-label {
+    font-size: 0.78rem;
+    font-weight: 650;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--ams-text-muted);
+}
+
+.app-password-field .btn {
+    border-color: var(--ams-border-strong);
+}
+
+/* Calendar toolbar + legend */
+.app-cal-toolbar {
+    gap: 0.75rem 1rem;
+}
+
+.app-cal-toolbar__heading {
+    min-width: 8rem;
+    text-align: center;
+}
+
+.app-cal-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.55rem 1rem;
+    padding: 0.55rem 0.75rem;
+    border: 1px solid var(--ams-border);
+    border-radius: var(--ams-radius);
+    background: var(--ams-surface);
+}
+
+.app-cal-legend__item {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.82rem;
+    color: var(--ams-text-muted);
+}
+
+.app-cal-legend__swatch {
+    width: 0.85rem;
+    height: 0.85rem;
+    border-radius: 0.2rem;
+    border-left-width: 3px;
+    border-left-style: solid;
+    display: inline-block;
+}
+
+.app-cal-legend__swatch.lecturer-cal-event--scheduled {
+    background-color: rgba(13, 110, 253, 0.08);
+    border-left-color: #0d6efd;
+}
+
+.app-cal-legend__swatch.lecturer-cal-event--in-progress {
+    background-color: rgba(25, 135, 84, 0.1);
+    border-left-color: #198754;
+}
+
+.app-cal-legend__swatch.lecturer-cal-event--completed {
+    background-color: rgba(108, 117, 125, 0.1);
+    border-left-color: #6c757d;
+}
+
+.app-cal-legend__swatch.lecturer-cal-event--cancelled {
+    background-color: rgba(220, 53, 69, 0.08);
+    border-left-color: #dc3545;
+}
+
+.app-cal-event-status {
+    font-size: 0.7rem;
+    font-weight: 650;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    opacity: 0.9;
+}
+
+.lecturer-cal-grid-card {
+    border: 1px solid var(--ams-border);
+    border-radius: var(--ams-radius-lg);
+    overflow: hidden;
+    box-shadow: var(--ams-shadow);
+}
+
+.lecturer-cal-grid th {
+    font-size: 0.75rem;
+    font-weight: 650;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--ams-text-muted);
+}
+
+.lecturer-cal-cell {
+    min-height: 7.5rem;
+    padding: 0.45rem !important;
+}
+
+.lecturer-cal-events {
+    max-height: 9.5rem;
+    overflow: auto;
+}
+
+.lecturer-cal-event {
+    overflow: hidden;
+}
+
+@media (max-width: 991.98px) {
+    .app-auth {
+        grid-template-columns: 1fr;
+        min-height: auto;
+    }
+
+    .app-auth__panel--brand {
+        padding: 1.75rem 1.25rem 1.25rem;
+        min-height: auto;
+    }
+
+    .app-auth__title {
+        font-size: 1.35rem;
+    }
+
+    .app-auth__panel--form {
+        padding: 1.25rem 1rem 2rem;
+    }
+
+    .app-cal-toolbar {
+        flex-direction: column;
+        align-items: stretch !important;
+    }
+
+    .app-cal-toolbar__views,
+    .app-cal-toolbar__nav {
+        width: 100%;
+        justify-content: center;
+    }
+
+    .lecturer-cal-cell {
+        min-height: 5.5rem;
+    }
+
+    .lecturer-cal-events {
+        max-height: 7rem;
+    }
+}
+
+@media (max-width: 575.98px) {
+    .app-auth__card .form-control-lg,
+    .app-auth__card .input-group-lg > .form-control,
+    .app-auth__card .btn-lg {
+        font-size: 1rem;
+    }
+
+    .app-auth__card .card-body {
+        padding: 1.5rem 1.25rem;
+    }
+
+    .app-auth__card-title {
+        white-space: normal;
+        font-size: 1.35rem;
+    }
+
+    .app-cal-legend {
+        gap: 0.4rem 0.75rem;
+    }
+
+    .lecturer-cal-grid {
+        font-size: 0.78rem;
+    }
+
+    .lecturer-cal-cell {
+        min-height: 4.75rem;
+        padding: 0.3rem !important;
+    }
+
+    .dashboard-role-badge {
+        max-width: 100%;
+    }
+}
+
+@keyframes app-auth-fade-up {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes app-auth-mark-float {
+    0%,
+    100% {
+        transform: translateY(0);
+    }
+
+    50% {
+        transform: translateY(-4px);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .app-auth,
+    .app-auth__card,
+    .app-auth__brand,
+    .app-auth__mark,
+    .app-auth__card .btn-primary,
+    .lecturer-cal-event-card {
+        transition: none !important;
+        animation: none !important;
+    }
+
+    .app-auth__brand,
+    .app-auth__card,
+    .app-auth__mark {
+        opacity: 1 !important;
+        transform: none !important;
+    }
 }

@@ -8,6 +8,7 @@ if (!defined('APP_STARTED')) {
 }
 
 $pageTitle = $pageTitle ?? APP_NAME;
+$authPage = !empty($authPage);
 $user = current_user();
 $homeUrl = $user !== null
     ? app_url(role_dashboard_path($user['role']))
@@ -24,7 +25,8 @@ $flash = get_flash();
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
     <link href="<?= e(asset_url('css/app.css')) ?>" rel="stylesheet">
 </head>
-<body class="bg-light d-flex flex-column min-vh-100">
+<body class="<?= $authPage ? 'app-auth-body' : 'bg-light d-flex flex-column min-vh-100' ?>">
+<?php if (!$authPage): ?>
 <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
     <div class="container">
         <a class="navbar-brand" href="<?= e($homeUrl) ?>"><?= e(APP_NAME) ?></a>
@@ -40,6 +42,9 @@ $flash = get_flash();
     </div>
 </nav>
 <main class="container py-4 flex-grow-1 app-main">
+<?php else: ?>
+<main class="app-auth-main flex-grow-1">
+<?php endif; ?>
 <?php if ($flash !== null): ?>
     <?php
     $flashClass = match ($flash['type']) {
@@ -48,7 +53,9 @@ $flash = get_flash();
         default => 'alert-info',
     };
     ?>
-    <div class="alert <?= e($flashClass) ?>" role="alert">
-        <?= e($flash['message']) ?>
+    <div class="<?= $authPage ? 'container pt-3' : '' ?>">
+        <div class="alert <?= e($flashClass) ?> <?= $authPage ? 'app-auth-alert' : '' ?>" role="alert">
+            <?= e($flash['message']) ?>
+        </div>
     </div>
 <?php endif; ?>

@@ -46,23 +46,38 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
 }
 
 $pageTitle = 'Sign in';
+$authPage = true;
 require INCLUDES_PATH . '/header.php';
 ?>
 
-<div class="row justify-content-center">
-    <div class="col-md-6 col-lg-4">
-        <div class="card shadow-sm">
-            <div class="card-body p-4">
-                <h1 class="h4 mb-2">Sign in</h1>
-                <p class="text-muted mb-4">Use your username or email address.</p>
+<div class="app-auth">
+    <div class="app-auth__panel app-auth__panel--brand">
+        <div class="app-auth__brand">
+            <div class="app-auth__mark" aria-hidden="true">
+                <i class="bi bi-mortarboard-fill"></i>
+            </div>
+            <p class="app-auth__eyebrow"><?= e(APP_NAME) ?></p>
+            <h1 class="app-auth__title">Smart Student Management &amp; Attendance System</h1>
+            <p class="app-auth__lead">
+                Manage students, teaching and attendance from one secure workspace.
+            </p>
+        </div>
+    </div>
+
+    <div class="app-auth__panel app-auth__panel--form">
+        <div class="app-auth__card card border-0">
+            <div class="card-body">
+                <h2 class="app-auth__card-title mb-1">Welcome back</h2>
+                <p class="text-muted mb-4">Sign in with your username or email address.</p>
 
                 <form method="post" action="<?= e(app_url('login.php')) ?>" novalidate>
                     <?= csrf_field() ?>
+
                     <div class="mb-3">
                         <label for="identifier" class="form-label">Username or email</label>
                         <input
                             type="text"
-                            class="form-control"
+                            class="form-control form-control-lg"
                             id="identifier"
                             name="identifier"
                             value="<?= e($identifier) ?>"
@@ -71,23 +86,68 @@ require INCLUDES_PATH . '/header.php';
                             autofocus
                         >
                     </div>
+
                     <div class="mb-4">
                         <label for="password" class="form-label">Password</label>
-                        <input
-                            type="password"
-                            class="form-control"
-                            id="password"
-                            name="password"
-                            autocomplete="current-password"
-                            required
-                        >
+                        <div class="app-password-field input-group input-group-lg">
+                            <input
+                                type="password"
+                                class="form-control"
+                                id="password"
+                                name="password"
+                                autocomplete="current-password"
+                                required
+                            >
+                            <button
+                                type="button"
+                                class="btn btn-outline-secondary"
+                                id="toggle-password"
+                                aria-label="Show password"
+                                aria-controls="password"
+                                aria-pressed="false"
+                            >
+                                <i class="bi bi-eye" aria-hidden="true"></i>
+                                <span class="visually-hidden">Show password</span>
+                            </button>
+                        </div>
                     </div>
-                    <button type="submit" class="btn btn-primary w-100">Sign in</button>
+
+                    <button type="submit" class="btn btn-primary btn-lg w-100">Sign in</button>
                 </form>
+
+                <p class="app-auth__footnote text-muted small text-center mb-0 mt-4">
+                    Institutional access only.<br>
+                    Contact your administrator if you need an account.
+                </p>
             </div>
         </div>
     </div>
 </div>
+
+<script>
+(function () {
+    const input = document.getElementById('password');
+    const button = document.getElementById('toggle-password');
+    if (!input || !button) {
+        return;
+    }
+
+    button.addEventListener('click', function () {
+        const showing = input.type === 'text';
+        input.type = showing ? 'password' : 'text';
+        button.setAttribute('aria-pressed', showing ? 'false' : 'true');
+        button.setAttribute('aria-label', showing ? 'Show password' : 'Hide password');
+        const icon = button.querySelector('i');
+        const sr = button.querySelector('.visually-hidden');
+        if (icon) {
+            icon.className = showing ? 'bi bi-eye' : 'bi bi-eye-slash';
+        }
+        if (sr) {
+            sr.textContent = showing ? 'Show password' : 'Hide password';
+        }
+    });
+})();
+</script>
 
 <?php
 require INCLUDES_PATH . '/footer.php';
