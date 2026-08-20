@@ -153,6 +153,7 @@ foreach ($courses as $course) {
 
 $isStudentActive = (string) $dbStudent['status'] === 'ACTIVE';
 $isStudentInactive = (string) $dbStudent['status'] === 'INACTIVE';
+$statusMismatch = student_account_status_is_mismatched($dbStudent);
 
 require INCLUDES_PATH . '/dashboard-layout-start.php';
 ?>
@@ -172,6 +173,15 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
         </div>
     </div>
 </div>
+
+<?php if ($statusMismatch): ?>
+    <div class="alert alert-warning">
+        Status mismatch detected: student profile is <strong><?= e((string) $dbStudent['status']) ?></strong>
+        but login account is <strong><?= e((string) $dbStudent['account_status']) ?></strong>.
+        Use <strong>Deactivate Student / Reactivate Student</strong> below to align ACTIVE/INACTIVE consistently.
+        No automatic bulk repair is applied.
+    </div>
+<?php endif; ?>
 
 <?php if ($isStudentActive || $isStudentInactive): ?>
     <div class="card shadow-sm mb-4 border-<?= $isStudentActive ? 'warning' : 'success' ?>">

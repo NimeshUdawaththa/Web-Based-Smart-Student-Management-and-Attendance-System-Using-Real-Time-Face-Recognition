@@ -786,12 +786,24 @@ function staff_no_exists(string $table, string $staffNo, ?int $excludeId = null)
 }
 
 /**
+ * Roles managed by Admin User Management (not STUDENT).
+ *
+ * @return list<string>
+ */
+function user_management_roles(): array
+{
+    return ['ADMIN', 'ACADEMIC_STAFF', 'LECTURER'];
+}
+
+/**
  * @param array{search?: string, role?: string, status?: string} $filters
  * @return list<array<string, mixed>>
  */
 function list_users(array $filters = []): array
 {
-    $sql = 'SELECT user_id, username, email, role, status, created_at, updated_at FROM users WHERE 1=1';
+    $sql = "SELECT user_id, username, email, role, status, created_at, updated_at
+            FROM users
+            WHERE role IN ('ADMIN', 'ACADEMIC_STAFF', 'LECTURER')";
     $params = [];
 
     if (!empty($filters['search'])) {
@@ -799,7 +811,10 @@ function list_users(array $filters = []): array
         $params['search'] = '%' . $filters['search'] . '%';
     }
 
-    if (!empty($filters['role']) && in_array($filters['role'], AUTH_ROLES, true)) {
+    if (!empty($filters['role'])) {
+        if (!in_array($filters['role'], user_management_roles(), true)) {
+            return [];
+        }
         $sql .= ' AND role = :role';
         $params['role'] = $filters['role'];
     }
@@ -835,6 +850,9 @@ function get_user(int $userId): ?array
 }
 
 /**
+ * Create a User Management account (ADMIN / ACADEMIC_STAFF / LECTURER only).
+ * STUDENT accounts must be created via Student Management → Register Student.
+ *
  * @param array{username: string, email: string, password: string, role: string, status: string} $data
  */
 function create_user(array $data): int
@@ -847,7 +865,11 @@ function create_user(array $data): int
         throw new InvalidArgumentException('Email is already in use.');
     }
 
-    if (!in_array($data['role'], AUTH_ROLES, true)) {
+    $role = (string) ($data['role'] ?? '');
+    if ($role === 'STUDENT') {
+        throw new InvalidArgumentException(student_accounts_managed_elsewhere_message() . ' Use Student Management → Register Student.');
+    }
+    if (!in_array($role, user_management_roles(), true)) {
         throw new InvalidArgumentException('Invalid role selected.');
     }
 
@@ -863,11 +885,75 @@ function create_user(array $data): int
         'username' => $data['username'],
         'email' => $data['email'],
         'password_hash' => password_hash($data['password'], PASSWORD_DEFAULT),
-        'role' => $data['role'],
+        'role' => $role,
         'status' => $data['status'],
     ]);
 
     return (int) db()->lastInsertId();
+}
+
+/**
+ * Canonical message when generic User Management targets a STUDENT account.
+ */
+function student_accounts_managed_elsewhere_message(): string
+{
+    return 'Student accounts are managed from Student Management.';
+}
+
+/**
+ * Canonical message when generic User Management tries to change a STUDENT login status.
+ */
+function student_status_managed_elsewhere_message(): string
+{
+    return 'Student account status is managed from Student Management. Use Deactivate Student / Reactivate Student on the student record.';
+}
+
+/**
+ * Linked student_id for a login account, if a student profile exists.
+ */
+function get_student_id_by_user_id(int $userId): ?int
+{
+    $statement = db()->prepare(
+        'SELECT student_id FROM students WHERE user_id = :user_id LIMIT 1'
+    );
+    $statement->execute(['user_id' => $userId]);
+    $value = $statement->fetchColumn();
+
+    return $value === false ? null : (int) $value;
+}
+
+/**
+ * True when ACTIVE/INACTIVE profile and login statuses disagree
+ * (the desync User Management could previously create).
+ * GRADUATED/SUSPENDED combinations are left for Student Management semantics.
+ *
+ * @param array<string, mixed> $student Row from get_student() (needs status + account_status)
+ */
+function student_account_status_is_mismatched(array $student): bool
+{
+    $profile = (string) ($student['status'] ?? '');
+    $account = (string) ($student['account_status'] ?? '');
+
+    return ($profile === 'ACTIVE' && $account === 'INACTIVE')
+        || ($profile === 'INACTIVE' && $account === 'ACTIVE');
+}
+
+/**
+ * Reject independent STUDENT login status changes via User Management helpers.
+ * Does not write anything — call before mutating users.status for STUDENT accounts.
+ */
+function assert_user_management_may_change_status(array $user, string $newStatus): void
+{
+    if ((string) ($user['role'] ?? '') !== 'STUDENT') {
+        return;
+    }
+
+    $current = (string) ($user['status'] ?? '');
+    if ($newStatus === $current) {
+        return;
+    }
+
+    throw new InvalidArgumentException(student_status_managed_elsewhere_message());
 }
 
 /**
@@ -878,6 +964,10 @@ function update_user(int $userId, array $data): void
     $user = get_user($userId);
     if ($user === null) {
         throw new InvalidArgumentException('User not found.');
+    }
+
+    if ((string) $user['role'] === 'STUDENT') {
+        throw new InvalidArgumentException(student_accounts_managed_elsewhere_message());
     }
 
     $username = $data['username'] ?? $user['username'];
@@ -893,13 +983,19 @@ function update_user(int $userId, array $data): void
         throw new InvalidArgumentException('Email is already in use.');
     }
 
-    if (!in_array($role, AUTH_ROLES, true)) {
+    if ((string) $role === 'STUDENT') {
+        throw new InvalidArgumentException(student_accounts_managed_elsewhere_message() . ' Use Student Management → Register Student.');
+    }
+
+    if (!in_array($role, user_management_roles(), true)) {
         throw new InvalidArgumentException('Invalid role selected.');
     }
 
     if (!in_array($status, user_statuses(), true)) {
         throw new InvalidArgumentException('Invalid account status selected.');
     }
+
+    assert_user_management_may_change_status($user, (string) $status);
 
     $sql = 'UPDATE users SET username = :username, email = :email, role = :role, status = :status';
     $params = [
@@ -927,6 +1023,17 @@ function set_user_status(int $userId, string $status): void
         throw new InvalidArgumentException('Invalid account status selected.');
     }
 
+    $user = get_user($userId);
+    if ($user === null) {
+        throw new InvalidArgumentException('User not found.');
+    }
+
+    assert_user_management_may_change_status($user, $status);
+
+    if ((string) $user['status'] === $status) {
+        return;
+    }
+
     $statement = db()->prepare(
         'UPDATE users SET status = :status WHERE user_id = :user_id'
     );
@@ -934,10 +1041,6 @@ function set_user_status(int $userId, string $status): void
         'status' => $status,
         'user_id' => $userId,
     ]);
-
-    if ($statement->rowCount() === 0) {
-        throw new InvalidArgumentException('User not found.');
-    }
 }
 
 /**

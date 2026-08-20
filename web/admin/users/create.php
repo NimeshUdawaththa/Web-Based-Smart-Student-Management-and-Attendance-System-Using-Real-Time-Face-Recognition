@@ -7,12 +7,13 @@ require_once dirname(__DIR__, 2) . '/shared/includes/init.php';
 require_admin();
 
 $pageTitle = 'Create User';
+$managementRoles = user_management_roles();
 $errors = [];
 $form = [
     'username' => '',
     'email' => '',
     'password' => '',
-    'role' => 'STUDENT',
+    'role' => 'LECTURER',
     'status' => 'ACTIVE',
 ];
 
@@ -59,6 +60,11 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
     <a href="<?= e(app_url('admin/users/index.php')) ?>" class="btn btn-outline-secondary btn-sm">Back to Users</a>
 </div>
 
+<div class="alert alert-info">
+    Create Admin, Academic Staff, or Lecturer accounts here.
+    Student accounts must be created from <a href="<?= e(app_url('admin/students/register.php')) ?>" class="alert-link">Student Management → Register Student</a>.
+</div>
+
 <?php if ($errors !== []): ?>
     <div class="alert alert-danger">
         <ul class="mb-0">
@@ -87,7 +93,7 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
         <div class="col-md-3">
             <label for="role" class="form-label">Role</label>
             <select class="form-select" id="role" name="role">
-                <?php foreach (AUTH_ROLES as $authRole): ?>
+                <?php foreach ($managementRoles as $authRole): ?>
                     <option value="<?= e($authRole) ?>" <?= $form['role'] === $authRole ? 'selected' : '' ?>><?= e(role_label($authRole)) ?></option>
                 <?php endforeach; ?>
             </select>

@@ -10,6 +10,7 @@ $pageTitle = 'User Management';
 $search = trim((string) ($_GET['search'] ?? ''));
 $role = (string) ($_GET['role'] ?? '');
 $status = (string) ($_GET['status'] ?? '');
+$managementRoles = user_management_roles();
 
 if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && isset($_POST['toggle_user_id'], $_POST['toggle_status'])) {
     if (!verify_csrf()) {
@@ -41,7 +42,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && isset($_POST['toggle_use
 
 $users = list_users(array_filter([
     'search' => $search,
-    'role' => in_array($role, AUTH_ROLES, true) ? $role : null,
+    'role' => in_array($role, $managementRoles, true) ? $role : null,
     'status' => in_array($status, user_statuses(), true) ? $status : null,
 ]));
 
@@ -49,7 +50,7 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
 ?>
 
 <div class="d-flex justify-content-between align-items-center mb-4">
-    <p class="text-muted mb-0">Manage system login accounts.</p>
+    <p class="text-muted mb-0">Manage Admin, Academic Staff, and Lecturer login accounts. Student accounts are managed from Student Management.</p>
     <a href="<?= e(app_url('admin/users/create.php')) ?>" class="btn btn-primary">Create User</a>
 </div>
 
@@ -64,7 +65,7 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
                 <label for="role" class="form-label">Role</label>
                 <select class="form-select" id="role" name="role">
                     <option value="">All roles</option>
-                    <?php foreach (AUTH_ROLES as $authRole): ?>
+                    <?php foreach ($managementRoles as $authRole): ?>
                         <option value="<?= e($authRole) ?>" <?= $role === $authRole ? 'selected' : '' ?>><?= e(role_label($authRole)) ?></option>
                     <?php endforeach; ?>
                 </select>
@@ -101,25 +102,25 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
                 <?php if ($users === []): ?>
                     <tr><td colspan="5" class="text-center text-muted py-4">No users found.</td></tr>
                 <?php else: ?>
-                    <?php foreach ($users as $user): ?>
+                    <?php foreach ($users as $listedUser): ?>
                         <tr>
-                            <td><?= e($user['username']) ?></td>
-                            <td><?= e($user['email']) ?></td>
-                            <td><?= e(role_label($user['role'])) ?></td>
-                            <td><span class="badge <?= e(status_badge_class($user['status'])) ?>"><?= e($user['status']) ?></span></td>
+                            <td><?= e($listedUser['username']) ?></td>
+                            <td><?= e($listedUser['email']) ?></td>
+                            <td><?= e(role_label($listedUser['role'])) ?></td>
+                            <td><span class="badge <?= e(status_badge_class($listedUser['status'])) ?>"><?= e($listedUser['status']) ?></span></td>
                             <td class="text-end">
-                                <a href="<?= e(app_url('admin/users/edit.php?id=' . $user['user_id'])) ?>" class="btn btn-sm btn-outline-primary">Edit</a>
-                                <?php if ($user['status'] === 'ACTIVE'): ?>
+                                <a href="<?= e(app_url('admin/users/edit.php?id=' . $listedUser['user_id'])) ?>" class="btn btn-sm btn-outline-primary">Edit</a>
+                                <?php if ($listedUser['status'] === 'ACTIVE'): ?>
                                     <form method="post" class="d-inline">
                                         <?= csrf_field() ?>
-                                        <input type="hidden" name="toggle_user_id" value="<?= e((string) $user['user_id']) ?>">
+                                        <input type="hidden" name="toggle_user_id" value="<?= e((string) $listedUser['user_id']) ?>">
                                         <input type="hidden" name="toggle_status" value="INACTIVE">
                                         <button type="submit" class="btn btn-sm btn-outline-warning">Deactivate</button>
                                     </form>
                                 <?php else: ?>
                                     <form method="post" class="d-inline">
                                         <?= csrf_field() ?>
-                                        <input type="hidden" name="toggle_user_id" value="<?= e((string) $user['user_id']) ?>">
+                                        <input type="hidden" name="toggle_user_id" value="<?= e((string) $listedUser['user_id']) ?>">
                                         <input type="hidden" name="toggle_status" value="ACTIVE">
                                         <button type="submit" class="btn btn-sm btn-outline-success">Activate</button>
                                     </form>

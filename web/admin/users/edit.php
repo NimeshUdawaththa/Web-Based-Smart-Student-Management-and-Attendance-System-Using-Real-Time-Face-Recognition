@@ -12,20 +12,40 @@ if ($userId === null) {
     redirect('admin/users/index.php');
 }
 
-$user = get_user($userId);
-if ($user === null) {
+$accountUser = get_user($userId);
+if ($accountUser === null) {
     set_flash('error', 'User not found.');
     redirect('admin/users/index.php');
 }
 
+if ((string) $accountUser['role'] === 'STUDENT') {
+    $linkedStudentId = get_student_id_by_user_id($userId);
+    if ($linkedStudentId !== null) {
+        set_flash('error', student_accounts_managed_elsewhere_message());
+        redirect('admin/students/edit.php?id=' . $linkedStudentId);
+    }
+
+    set_flash(
+        'error',
+        student_accounts_managed_elsewhere_message() . ' No linked student profile was found for this login.'
+    );
+    redirect('admin/users/index.php');
+}
+
+if (!in_array((string) $accountUser['role'], user_management_roles(), true)) {
+    set_flash('error', 'This account cannot be edited from User Management.');
+    redirect('admin/users/index.php');
+}
+
 $pageTitle = 'Edit User';
+$managementRoles = user_management_roles();
 $errors = [];
 $form = [
     'user_id' => (string) $userId,
-    'username' => (string) $user['username'],
-    'email' => (string) $user['email'],
-    'role' => (string) $user['role'],
-    'status' => (string) $user['status'],
+    'username' => (string) $accountUser['username'],
+    'email' => (string) $accountUser['email'],
+    'role' => (string) $accountUser['role'],
+    'status' => (string) $accountUser['status'],
     'password' => '',
 ];
 
@@ -107,7 +127,7 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
         <div class="col-md-3">
             <label for="role" class="form-label">Role</label>
             <select class="form-select" id="role" name="role">
-                <?php foreach (AUTH_ROLES as $authRole): ?>
+                <?php foreach ($managementRoles as $authRole): ?>
                     <option value="<?= e($authRole) ?>" <?= $form['role'] === $authRole ? 'selected' : '' ?>><?= e(role_label($authRole)) ?></option>
                 <?php endforeach; ?>
             </select>
