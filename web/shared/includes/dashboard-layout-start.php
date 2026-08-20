@@ -59,9 +59,9 @@ $currentPath = parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH) ?: '';
     </aside>
     <div class="dashboard-content flex-grow-1">
         <header class="dashboard-topbar border-bottom bg-white px-4 py-3">
-            <h1 class="h4 mb-0"><?= e($pageTitle) ?></h1>
+            <h1 class="h4 mb-0 app-page-title"><?= e($pageTitle) ?></h1>
         </header>
-        <main class="p-4">
+        <main class="p-4 app-main">
             <?php if ($flash !== null): ?>
                 <?php
                 $flashClass = match ($flash['type']) {

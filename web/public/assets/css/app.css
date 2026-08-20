@@ -1,111 +1,551 @@
-body {
-    font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+/* =============================================================================
+   SmartAMS — Global Design System (Phase 1)
+   Bootstrap 5.3.3 companion styles. Institutional blue identity retained.
+   Calendar status colours and face/attendance behaviour are not redesigned here.
+   ============================================================================= */
+
+:root {
+    /* Surfaces */
+    --ams-bg: #f4f6f9;
+    --ams-surface: #ffffff;
+    --ams-subtle: #f8f9fa;
+    --ams-border: #e5e9ef;
+    --ams-border-strong: #dee2e6;
+
+    /* Brand (institutional blue — aligned with Bootstrap primary) */
+    --ams-primary: #0d6efd;
+    --ams-primary-rgb: 13, 110, 253;
+    --ams-primary-soft: rgba(13, 110, 253, 0.08);
+
+    /* Text */
+    --ams-text: #212529;
+    --ams-text-muted: #6c757d;
+    --ams-text-soft: #868e96;
+
+    /* Semantic soft surfaces */
+    --ams-success-soft: rgba(25, 135, 84, 0.1);
+    --ams-warning-soft: rgba(255, 193, 7, 0.16);
+    --ams-danger-soft: rgba(220, 53, 69, 0.1);
+    --ams-info-soft: rgba(13, 202, 240, 0.12);
+
+    /* Shape & elevation */
+    --ams-radius-sm: 0.375rem;
+    --ams-radius: 0.5rem;
+    --ams-radius-lg: 0.75rem;
+    --ams-radius-pill: 50rem;
+    --ams-shadow: 0 0.125rem 0.35rem rgba(33, 37, 41, 0.06);
+    --ams-shadow-hover: 0 0.35rem 0.85rem rgba(33, 37, 41, 0.1);
+
+    /* Layout */
+    --ams-sidebar-width: 260px;
+    --ams-transition: 0.15s ease-in-out;
 }
 
-.card {
-    border: 0;
+/* -----------------------------------------------------------------------------
+   Base typography & page chrome
+   ----------------------------------------------------------------------------- */
+
+body {
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    color: var(--ams-text);
+    -webkit-font-smoothing: antialiased;
 }
 
 .dashboard-body {
-    background-color: #f8f9fa;
+    background-color: var(--ams-bg);
+}
+
+.dashboard-shell {
+    min-height: 100vh;
 }
 
 .dashboard-sidebar {
-    width: 260px;
+    width: var(--ams-sidebar-width);
     min-height: 100vh;
 }
 
 .dashboard-content {
     min-width: 0;
+    background-color: var(--ams-bg);
 }
 
 .dashboard-topbar {
     position: sticky;
     top: 0;
     z-index: 10;
+    background-color: var(--ams-surface) !important;
+    border-bottom-color: var(--ams-border) !important;
+    box-shadow: 0 1px 0 rgba(33, 37, 41, 0.03);
+}
+
+.dashboard-topbar h1,
+.dashboard-topbar .app-page-title {
+    font-weight: 650;
+    letter-spacing: -0.01em;
+    color: var(--ams-text);
+}
+
+.dashboard-content > main,
+.app-main {
+    color: var(--ams-text);
+}
+
+.dashboard-content .text-muted,
+.app-main .text-muted {
+    color: var(--ams-text-muted) !important;
 }
 
 .active-sidebar-link {
-    background-color: rgba(255, 255, 255, 0.15);
-    border-radius: 0.375rem;
+    background-color: rgba(255, 255, 255, 0.18);
+    border-radius: var(--ams-radius-sm);
     font-weight: 600;
 }
 
-@media (max-width: 991.98px) {
-    .dashboard-shell {
-        flex-direction: column;
-    }
-
-    .dashboard-sidebar {
-        width: 100%;
-        min-height: auto;
-    }
+.dashboard-sidebar .nav-link {
+    border-radius: var(--ams-radius-sm);
+    padding: 0.45rem 0.75rem;
+    transition: background-color var(--ams-transition), color var(--ams-transition);
 }
 
-.lecturer-cal-grid-card .table {
-    table-layout: fixed;
+.dashboard-sidebar .nav-link:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+    color: #fff !important;
 }
 
-.lecturer-cal-cell {
-    vertical-align: top;
-    min-height: 7rem;
-    width: 14.28%;
+.dashboard-sidebar .navbar-brand {
+    font-weight: 650;
+    letter-spacing: -0.015em;
 }
 
-.lecturer-cal-cell--muted {
-    background-color: #f8f9fa;
+/* -----------------------------------------------------------------------------
+   Page header helpers (opt-in for later phases; safe if unused)
+   ----------------------------------------------------------------------------- */
+
+.app-page-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.75rem 1rem;
+    margin-bottom: 1.25rem;
 }
 
-.lecturer-cal-cell--today {
-    background-color: rgba(13, 110, 253, 0.06);
+.app-page-header__body {
+    min-width: 0;
+    flex: 1 1 14rem;
 }
 
-.lecturer-cal-day-number {
-    color: inherit;
+.app-page-header__title {
+    margin: 0;
+    font-size: 1.35rem;
+    font-weight: 650;
+    letter-spacing: -0.015em;
+    line-height: 1.3;
+    color: var(--ams-text);
 }
 
-.lecturer-cal-events {
-    min-height: 3rem;
+.app-page-header__desc {
+    margin: 0.35rem 0 0;
+    color: var(--ams-text-muted);
+    font-size: 0.9375rem;
+    line-height: 1.45;
+    max-width: 42rem;
 }
 
-.lecturer-cal-event {
+.app-page-header__actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    flex: 0 0 auto;
+}
+
+/* -----------------------------------------------------------------------------
+   Cards
+   ----------------------------------------------------------------------------- */
+
+.card {
+    background-color: var(--ams-surface);
+    border: 1px solid var(--ams-border);
+    border-radius: var(--ams-radius-lg);
+    box-shadow: var(--ams-shadow);
+}
+
+.card.shadow-sm {
+    box-shadow: var(--ams-shadow) !important;
+}
+
+.card-header {
+    background-color: var(--ams-surface);
+    border-bottom-color: var(--ams-border);
+    border-top-left-radius: calc(var(--ams-radius-lg) - 1px);
+    border-top-right-radius: calc(var(--ams-radius-lg) - 1px);
+}
+
+.card-header.bg-white {
+    background-color: var(--ams-surface) !important;
+}
+
+.card-body {
+    padding: 1.15rem 1.25rem;
+}
+
+.card-title,
+.card-body > .h5,
+.card-body > h2.h5 {
+    font-weight: 650;
+    letter-spacing: -0.01em;
+}
+
+/* Opt-in card variants */
+.app-card {
+    background-color: var(--ams-surface);
+    border: 1px solid var(--ams-border);
+    border-radius: var(--ams-radius-lg);
+    box-shadow: var(--ams-shadow);
+}
+
+.app-card-interactive {
+    transition: box-shadow var(--ams-transition), transform var(--ams-transition), border-color var(--ams-transition);
+}
+
+.app-card-interactive:hover {
+    box-shadow: var(--ams-shadow-hover);
+    border-color: rgba(var(--ams-primary-rgb), 0.28);
+}
+
+/* Shortcut/dashboard cards: subtle lift only when they look like tiles */
+.dashboard-content main > .row > [class*="col-"] > .card.h-100 {
+    transition: box-shadow var(--ams-transition), border-color var(--ams-transition);
+}
+
+.dashboard-content main > .row > [class*="col-"] > .card.h-100:hover {
+    box-shadow: var(--ams-shadow-hover);
+    border-color: rgba(var(--ams-primary-rgb), 0.22);
+}
+
+/* -----------------------------------------------------------------------------
+   Metric cards (prepared for Phase 2 dashboards — unused until then)
+   ----------------------------------------------------------------------------- */
+
+.metric-card {
+    background-color: var(--ams-surface);
+    border: 1px solid var(--ams-border);
+    border-radius: var(--ams-radius-lg);
+    box-shadow: var(--ams-shadow);
+    padding: 1.1rem 1.2rem;
+    height: 100%;
+}
+
+.metric-card__label {
     display: block;
-    cursor: pointer;
+    font-size: 0.78rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    color: var(--ams-text-muted);
+    margin-bottom: 0.35rem;
 }
 
-.lecturer-cal-event-card {
-    transition: box-shadow 0.15s ease-in-out;
+.metric-card__value {
+    display: block;
+    font-size: 1.75rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: 1.15;
+    color: var(--ams-text);
 }
 
-.lecturer-cal-event-card:hover,
-.lecturer-cal-event:hover {
-    box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+.metric-card__helper {
+    display: block;
+    margin-top: 0.35rem;
+    font-size: 0.875rem;
+    color: var(--ams-text-muted);
 }
 
-.lecturer-cal-event--scheduled {
-    background-color: rgba(13, 110, 253, 0.08);
-    border-left: 3px solid #0d6efd;
+.metric-card__icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: var(--ams-radius);
+    background-color: var(--ams-primary-soft);
+    color: var(--ams-primary);
+    flex-shrink: 0;
 }
 
-.lecturer-cal-event--in-progress {
-    background-color: rgba(25, 135, 84, 0.1);
-    border-left: 3px solid #198754;
+.metric-card__row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.75rem;
 }
 
-.lecturer-cal-event--completed {
-    background-color: rgba(108, 117, 125, 0.1);
-    border-left: 3px solid #6c757d;
+/* -----------------------------------------------------------------------------
+   Buttons
+   ----------------------------------------------------------------------------- */
+
+.btn {
+    border-radius: var(--ams-radius-sm);
+    font-weight: 550;
+    transition: background-color var(--ams-transition), border-color var(--ams-transition),
+        color var(--ams-transition), box-shadow var(--ams-transition);
 }
 
-.lecturer-cal-event--cancelled {
-    background-color: rgba(220, 53, 69, 0.08);
-    border-left: 3px solid #dc3545;
-    opacity: 0.85;
+.btn:focus-visible {
+    outline: 0;
+    box-shadow: 0 0 0 0.2rem rgba(var(--ams-primary-rgb), 0.35);
 }
 
-.lecturer-cal-event--cancelled .fw-semibold {
-    text-decoration: line-through;
+.btn-primary {
+    box-shadow: 0 1px 2px rgba(var(--ams-primary-rgb), 0.2);
 }
+
+.btn-sm {
+    border-radius: calc(var(--ams-radius-sm) - 0.05rem);
+}
+
+.btn-group > .btn {
+    border-radius: var(--ams-radius-sm);
+}
+
+/* -----------------------------------------------------------------------------
+   Status badges
+   ----------------------------------------------------------------------------- */
+
+.badge {
+    font-weight: 575;
+    letter-spacing: 0.01em;
+    padding: 0.4em 0.65em;
+    border-radius: var(--ams-radius-pill);
+}
+
+.badge.text-bg-success,
+.badge.text-bg-primary,
+.badge.text-bg-secondary,
+.badge.text-bg-warning,
+.badge.text-bg-danger,
+.badge.text-bg-info,
+.badge.text-bg-light {
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+}
+
+/* -----------------------------------------------------------------------------
+   Tables
+   ----------------------------------------------------------------------------- */
+
+.table {
+    --bs-table-hover-bg: rgba(var(--ams-primary-rgb), 0.035);
+    margin-bottom: 0;
+    vertical-align: middle;
+    color: var(--ams-text);
+}
+
+.table > :not(caption) > * > * {
+    padding: 0.75rem 0.9rem;
+}
+
+.table thead th,
+.table-light th {
+    background-color: var(--ams-subtle) !important;
+    color: var(--ams-text-muted);
+    font-size: 0.78rem;
+    font-weight: 650;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    border-bottom-color: var(--ams-border) !important;
+    white-space: nowrap;
+}
+
+.table-hover > tbody > tr:hover > * {
+    --bs-table-bg-state: rgba(var(--ams-primary-rgb), 0.035);
+}
+
+.table .text-end .btn,
+.table .text-end .btn-group,
+.table td .btn + .btn,
+.table td form.d-inline {
+    margin-left: 0.2rem;
+}
+
+.table td .btn.btn-sm {
+    vertical-align: middle;
+}
+
+.app-table-sticky thead th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    box-shadow: inset 0 -1px 0 var(--ams-border);
+}
+
+.app-text-truncate {
+    max-width: 16rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.app-actions {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.35rem;
+}
+
+.app-actions-primary {
+    gap: 0.4rem;
+}
+
+.table-responsive {
+    border-radius: 0 0 var(--ams-radius-lg) var(--ams-radius-lg);
+}
+
+.card > .table-responsive {
+    border-bottom-left-radius: var(--ams-radius-lg);
+    border-bottom-right-radius: var(--ams-radius-lg);
+}
+
+/* -----------------------------------------------------------------------------
+   Filter cards / toolbars
+   ----------------------------------------------------------------------------- */
+
+.app-filter-card,
+form.card.shadow-sm.mb-4 {
+    background-color: var(--ams-subtle);
+    border-color: var(--ams-border);
+    box-shadow: none !important;
+}
+
+.app-filter-card .card-body,
+form.card.shadow-sm.mb-4 > .card-body {
+    padding: 1rem 1.15rem;
+}
+
+.app-filter-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem 1rem;
+    align-items: flex-end;
+}
+
+/* -----------------------------------------------------------------------------
+   Forms
+   ----------------------------------------------------------------------------- */
+
+.form-label {
+    font-weight: 575;
+    color: var(--ams-text);
+    margin-bottom: 0.35rem;
+}
+
+.form-text,
+.form-label + .form-text {
+    color: var(--ams-text-muted);
+}
+
+.form-control,
+.form-select {
+    border-color: var(--ams-border-strong);
+    border-radius: var(--ams-radius-sm);
+}
+
+.form-control:focus,
+.form-select:focus {
+    border-color: rgba(var(--ams-primary-rgb), 0.55);
+    box-shadow: 0 0 0 0.2rem rgba(var(--ams-primary-rgb), 0.18);
+}
+
+.app-required::after {
+    content: " *";
+    color: #dc3545;
+    font-weight: 700;
+}
+
+.app-form-section {
+    padding-bottom: 1rem;
+    margin-bottom: 1rem;
+    border-bottom: 1px solid var(--ams-border);
+}
+
+.app-form-section:last-child {
+    border-bottom: 0;
+    margin-bottom: 0;
+    padding-bottom: 0;
+}
+
+/* -----------------------------------------------------------------------------
+   Alerts / flash messages
+   ----------------------------------------------------------------------------- */
+
+.alert {
+    border-radius: var(--ams-radius);
+    border-width: 1px;
+    box-shadow: none;
+}
+
+.alert-success {
+    background-color: var(--ams-success-soft);
+    border-color: rgba(25, 135, 84, 0.28);
+}
+
+.alert-danger {
+    background-color: var(--ams-danger-soft);
+    border-color: rgba(220, 53, 69, 0.28);
+}
+
+.alert-warning {
+    background-color: var(--ams-warning-soft);
+    border-color: rgba(255, 193, 7, 0.45);
+}
+
+.alert-info {
+    background-color: var(--ams-info-soft);
+    border-color: rgba(13, 202, 240, 0.35);
+}
+
+.alert-light {
+    background-color: var(--ams-subtle);
+    border-color: var(--ams-border);
+}
+
+/* -----------------------------------------------------------------------------
+   Empty states (opt-in)
+   ----------------------------------------------------------------------------- */
+
+.app-empty-state {
+    text-align: center;
+    padding: 2.25rem 1.25rem;
+    color: var(--ams-text-muted);
+}
+
+.app-empty-state__title {
+    margin: 0 0 0.35rem;
+    font-size: 1.05rem;
+    font-weight: 650;
+    color: var(--ams-text);
+}
+
+.app-empty-state__message {
+    margin: 0 auto;
+    max-width: 28rem;
+    font-size: 0.9375rem;
+    line-height: 1.5;
+}
+
+.app-empty-state__action {
+    margin-top: 1rem;
+}
+
+.table td.text-muted.text-center {
+    color: var(--ams-text-muted) !important;
+}
+
+/* -----------------------------------------------------------------------------
+   Profile avatars (existing — tokenized borders)
+   ----------------------------------------------------------------------------- */
 
 .profile-avatar {
     display: inline-flex;
@@ -139,5 +579,162 @@ body {
 }
 
 .profile-avatar--placeholder {
-    border: 1px solid #dee2e6;
+    border: 1px solid var(--ams-border-strong);
+}
+
+/* -----------------------------------------------------------------------------
+   Calendar (Phase 5 territory — preserve status colours; light token reuse only)
+   ----------------------------------------------------------------------------- */
+
+.lecturer-cal-grid-card .table {
+    table-layout: fixed;
+}
+
+.lecturer-cal-cell {
+    vertical-align: top;
+    min-height: 7rem;
+    width: 14.28%;
+}
+
+.lecturer-cal-cell--muted {
+    background-color: var(--ams-subtle);
+}
+
+.lecturer-cal-cell--today {
+    background-color: rgba(13, 110, 253, 0.06);
+}
+
+.lecturer-cal-day-number {
+    color: inherit;
+}
+
+.lecturer-cal-events {
+    min-height: 3rem;
+}
+
+.lecturer-cal-event {
+    display: block;
+    cursor: pointer;
+}
+
+.lecturer-cal-event-card {
+    transition: box-shadow var(--ams-transition);
+}
+
+.lecturer-cal-event-card:hover,
+.lecturer-cal-event:hover {
+    box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+}
+
+.lecturer-cal-event--scheduled {
+    background-color: rgba(13, 110, 253, 0.08);
+    border-left: 3px solid #0d6efd;
+}
+
+.lecturer-cal-event--in-progress {
+    background-color: rgba(25, 135, 84, 0.1);
+    border-left: 3px solid #198754;
+}
+
+.lecturer-cal-event--completed {
+    background-color: rgba(108, 117, 125, 0.1);
+    border-left: 3px solid #6c757d;
+}
+
+.lecturer-cal-event--cancelled {
+    background-color: rgba(220, 53, 69, 0.08);
+    border-left: 3px solid #dc3545;
+    opacity: 0.85;
+}
+
+.lecturer-cal-event--cancelled .fw-semibold {
+    text-decoration: line-through;
+}
+
+/* -----------------------------------------------------------------------------
+   Responsive polish (sidebar redesign remains Phase 2)
+   ----------------------------------------------------------------------------- */
+
+@media (max-width: 991.98px) {
+    .dashboard-shell {
+        flex-direction: column;
+    }
+
+    .dashboard-sidebar {
+        width: 100%;
+        min-height: auto;
+    }
+
+    .dashboard-topbar {
+        padding-left: 1rem !important;
+        padding-right: 1rem !important;
+    }
+
+    .dashboard-content > main {
+        padding: 1rem !important;
+    }
+
+    .app-page-header {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .app-page-header__actions {
+        width: 100%;
+    }
+
+    .app-page-header__actions .btn {
+        flex: 1 1 auto;
+    }
+
+    .metric-card__value {
+        font-size: 1.5rem;
+    }
+
+    .app-text-truncate {
+        max-width: 10rem;
+    }
+}
+
+@media (max-width: 575.98px) {
+    .card-body {
+        padding: 1rem;
+    }
+
+    .table > :not(caption) > * > * {
+        padding: 0.65rem 0.7rem;
+    }
+
+    .btn-group {
+        flex-wrap: wrap;
+    }
+}
+
+/* -----------------------------------------------------------------------------
+   Accessibility / motion
+   ----------------------------------------------------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        scroll-behavior: auto !important;
+        transition-duration: 0.01ms !important;
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+    }
+
+    .dashboard-content main > .row > [class*="col-"] > .card.h-100:hover,
+    .app-card-interactive:hover {
+        transform: none;
+    }
+}
+
+a:focus-visible,
+.btn:focus-visible,
+.form-control:focus-visible,
+.form-select:focus-visible,
+.nav-link:focus-visible {
+    outline: 2px solid rgba(var(--ams-primary-rgb), 0.65);
+    outline-offset: 2px;
 }

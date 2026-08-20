@@ -38,7 +38,7 @@ $flash = get_flash();
         <?php endif; ?>
     </div>
 </nav>
-<main class="container py-4 flex-grow-1">
+<main class="container py-4 flex-grow-1 app-main">
 <?php if ($flash !== null): ?>
     <?php
     $flashClass = match ($flash['type']) {
