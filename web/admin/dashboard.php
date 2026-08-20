@@ -54,6 +54,24 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
     <div class="col-md-6 col-lg-4">
         <div class="card shadow-sm h-100">
             <div class="card-body">
+                <h2 class="h5">Courses</h2>
+                <p class="text-muted">Create and maintain academic programmes.</p>
+                <a href="<?= e(app_url('admin/courses/index.php')) ?>" class="btn btn-primary btn-sm">Open</a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6 col-lg-4">
+        <div class="card shadow-sm h-100">
+            <div class="card-body">
+                <h2 class="h5">Batches</h2>
+                <p class="text-muted">Manage student intakes for each course.</p>
+                <a href="<?= e(app_url('admin/batches/index.php')) ?>" class="btn btn-primary btn-sm">Open</a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6 col-lg-4">
+        <div class="card shadow-sm h-100">
+            <div class="card-body">
                 <h2 class="h5">Timetable</h2>
                 <p class="text-muted">System-wide lecture timetable.</p>
                 <a href="<?= e(app_url('admin/schedules/index.php')) ?>" class="btn btn-primary btn-sm">Open</a>

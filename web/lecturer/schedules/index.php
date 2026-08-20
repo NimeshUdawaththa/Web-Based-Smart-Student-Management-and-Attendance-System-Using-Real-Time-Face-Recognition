@@ -10,6 +10,5 @@ if ($lecturer === null) {
     redirect('lecturer/dashboard.php');
 }
 $academicRoutePrefix = 'lecturer';
-$readOnly = true;
 $restrictLecturerId = (int) $lecturer['lecturer_id'];
-require WEB_PATH . '/shared/pages/schedules/index.php';
+require WEB_PATH . '/shared/pages/calendar/lecturer.php';

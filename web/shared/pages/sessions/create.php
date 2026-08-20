@@ -68,7 +68,7 @@ foreach ($batches as $batch) {
 }
 $modulesById = [];
 foreach ($modules as $module) {
-    $modulesById[(int) $module['module_id']] = (int) $module['course_id'];
+    $modulesById[(int) $module['module_id']] = list_active_course_ids_for_module((int) $module['module_id']);
 }
 
 require INCLUDES_PATH . '/dashboard-layout-start.php';

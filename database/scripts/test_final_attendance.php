@@ -47,7 +47,8 @@ function ids_for_final_test(): array
          INNER JOIN modules m
             ON m.module_id = sm.module_id AND m.status = 'ACTIVE'
          INNER JOIN module_lecturers ml ON ml.module_id = m.module_id
-         INNER JOIN batches b ON b.batch_id = s.batch_id AND b.course_id = m.course_id
+         INNER JOIN batches b ON b.batch_id = s.batch_id
+         INNER JOIN course_modules cm ON cm.module_id = m.module_id AND cm.course_id = b.course_id AND cm.status = 'ACTIVE'
          WHERE s.status = 'ACTIVE'
          LIMIT 1"
     )->fetch();

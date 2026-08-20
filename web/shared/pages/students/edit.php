@@ -23,7 +23,7 @@ if ($student === null) {
 }
 
 $pageTitle = 'Edit Student';
-$courses = list_active_courses();
+$courses = courses_for_selection((int) $student['course_id']);
 $errors = [];
 $form = [
     'student_id' => (string) $studentId,
@@ -115,11 +115,13 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
 }
 
 $selectedCourseId = positive_int($form['course_id']);
-$batches = $selectedCourseId !== null ? list_batches_for_course($selectedCourseId) : [];
+$includeCurrentBatch = $selectedCourseId === (int) $student['course_id'] ? (int) $student['batch_id'] : null;
+$batches = $selectedCourseId !== null ? batches_for_selection($selectedCourseId, $includeCurrentBatch) : [];
 $batchOptions = [];
 
 foreach ($courses as $course) {
-    $batchOptions[(string) $course['course_id']] = list_batches_for_course((int) $course['course_id']);
+    $includeBatch = ((int) $course['course_id'] === (int) $student['course_id']) ? (int) $student['batch_id'] : null;
+    $batchOptions[(string) $course['course_id']] = batches_for_selection((int) $course['course_id'], $includeBatch);
 }
 
 require INCLUDES_PATH . '/dashboard-layout-start.php';
@@ -204,7 +206,7 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
                     <option value="">Select course</option>
                     <?php foreach ($courses as $course): ?>
                         <option value="<?= e((string) $course['course_id']) ?>" <?= (string) $selectedCourseId === (string) $course['course_id'] ? 'selected' : '' ?>>
-                            <?= e($course['course_code'] . ' - ' . $course['course_name']) ?>
+                            <?= e(course_choice_label($course)) ?>
                         </option>
                     <?php endforeach; ?>
                 </select>
@@ -215,7 +217,7 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
                     <option value="">Select batch</option>
                     <?php foreach ($batches as $batch): ?>
                         <option value="<?= e((string) $batch['batch_id']) ?>" <?= $form['batch_id'] === (string) $batch['batch_id'] ? 'selected' : '' ?>>
-                            <?= e($batch['batch_name'] . ' (' . $batch['intake_year'] . ')') ?>
+                            <?= e($batch['label'] ?? batch_choice_label($batch)) ?>
                         </option>
                     <?php endforeach; ?>
                 </select>

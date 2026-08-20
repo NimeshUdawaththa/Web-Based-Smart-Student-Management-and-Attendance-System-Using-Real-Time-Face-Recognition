@@ -23,12 +23,13 @@ require_once dirname(__DIR__, 2) . '/web/shared/includes/management.php';
 require_once dirname(__DIR__, 2) . '/web/shared/includes/academic.php';
 
 $ids = db()->query(
-    'SELECT m.module_id, ml.lecturer_id, b.batch_id
+    "SELECT m.module_id, ml.lecturer_id, b.batch_id
      FROM modules m
      INNER JOIN module_lecturers ml ON ml.module_id = m.module_id
-     INNER JOIN batches b ON b.course_id = m.course_id
-     WHERE m.status = \'ACTIVE\'
-     LIMIT 1'
+     INNER JOIN course_modules cm ON cm.module_id = m.module_id AND cm.status = 'ACTIVE'
+     INNER JOIN batches b ON b.course_id = cm.course_id
+     WHERE m.status = 'ACTIVE'
+     LIMIT 1"
 )->fetch();
 
 if ($ids === false) {

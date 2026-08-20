@@ -63,16 +63,151 @@ function validate_date_ymd(string $date): bool
 }
 
 /**
+ * @return list<string>
+ */
+function course_statuses(): array
+{
+    return ['ACTIVE', 'INACTIVE', 'ARCHIVED'];
+}
+
+/**
+ * @return list<string>
+ */
+function batch_statuses(): array
+{
+    return ['ACTIVE', 'COMPLETED', 'INACTIVE'];
+}
+
+function course_duration_min(): int
+{
+    return 1;
+}
+
+function course_duration_max(): int
+{
+    return 10;
+}
+
+function intake_year_min(): int
+{
+    return 2000;
+}
+
+function intake_year_max(): int
+{
+    return 2100;
+}
+
+function is_integrity_constraint_violation(Throwable $exception): bool
+{
+    if (!$exception instanceof PDOException) {
+        return false;
+    }
+
+    $code = (string) $exception->getCode();
+    $sqlState = (string) ($exception->errorInfo[0] ?? $code);
+
+    return $code === '23000' || $sqlState === '23000';
+}
+
+function course_status_label(string $status): string
+{
+    return match ($status) {
+        'ACTIVE' => 'Active',
+        'INACTIVE' => 'Inactive',
+        'ARCHIVED' => 'Archived',
+        default => $status,
+    };
+}
+
+function batch_status_label(string $status): string
+{
+    return match ($status) {
+        'ACTIVE' => 'Active',
+        'COMPLETED' => 'Completed',
+        'INACTIVE' => 'Inactive',
+        default => $status,
+    };
+}
+
+function course_choice_label(array $course): string
+{
+    $label = (string) $course['course_code'] . ' - ' . (string) $course['course_name'];
+    $status = (string) ($course['status'] ?? 'ACTIVE');
+    if ($status !== 'ACTIVE') {
+        $label .= ' (' . course_status_label($status) . ')';
+    }
+
+    return $label;
+}
+
+function batch_choice_label(array $batch): string
+{
+    $label = (string) $batch['batch_name'] . ' (' . (string) $batch['intake_year'] . ')';
+    $status = (string) ($batch['status'] ?? 'ACTIVE');
+    if ($status !== 'ACTIVE') {
+        $label .= ' (' . batch_status_label($status) . ')';
+    }
+
+    return $label;
+}
+
+function course_is_open_for_new(array $course): bool
+{
+    return ($course['status'] ?? '') === 'ACTIVE';
+}
+
+function batch_is_open_for_new(array $batch): bool
+{
+    return ($batch['status'] ?? '') === 'ACTIVE';
+}
+
+/**
  * @return list<array<string, mixed>>
  */
 function list_active_courses(): array
 {
     $statement = db()->query(
-        "SELECT course_id, course_code, course_name
+        "SELECT course_id, course_code, course_name, duration_years, status
          FROM courses
          WHERE status = 'ACTIVE'
          ORDER BY course_name"
     );
+
+    return $statement->fetchAll();
+}
+
+/**
+ * @param array{search?: string, status?: string} $filters
+ * @return list<array<string, mixed>>
+ */
+function list_courses(array $filters = []): array
+{
+    if (function_exists('ensure_course_modules_table')) {
+        ensure_course_modules_table();
+    }
+    $sql = "SELECT c.course_id, c.course_code, c.course_name, c.duration_years, c.status,
+                   c.created_at, c.updated_at,
+                   (SELECT COUNT(*) FROM batches b WHERE b.course_id = c.course_id) AS batch_count,
+                   (SELECT COUNT(*) FROM students s WHERE s.course_id = c.course_id) AS student_count,
+                   (SELECT COUNT(*) FROM course_modules cm WHERE cm.course_id = c.course_id AND cm.status = 'ACTIVE') AS module_count
+            FROM courses c
+            WHERE 1=1";
+    $params = [];
+
+    if (!empty($filters['search'])) {
+        $sql .= ' AND (c.course_code LIKE :search OR c.course_name LIKE :search)';
+        $params['search'] = '%' . $filters['search'] . '%';
+    }
+
+    if (!empty($filters['status']) && in_array($filters['status'], course_statuses(), true)) {
+        $sql .= ' AND c.status = :status';
+        $params['status'] = $filters['status'];
+    }
+
+    $sql .= ' ORDER BY c.course_code';
+    $statement = db()->prepare($sql);
+    $statement->execute($params);
 
     return $statement->fetchAll();
 }
@@ -83,7 +218,7 @@ function list_active_courses(): array
 function list_batches_for_course(int $courseId): array
 {
     $statement = db()->prepare(
-        "SELECT batch_id, batch_name, intake_year
+        "SELECT batch_id, course_id, batch_name, intake_year, status
          FROM batches
          WHERE course_id = :course_id
            AND status = 'ACTIVE'
@@ -92,6 +227,51 @@ function list_batches_for_course(int $courseId): array
     $statement->execute(['course_id' => $courseId]);
 
     return $statement->fetchAll();
+}
+
+/**
+ * Active courses, plus a current course that is no longer ACTIVE (edit forms).
+ *
+ * @return list<array<string, mixed>>
+ */
+function courses_for_selection(?int $includeCourseId = null): array
+{
+    $courses = list_active_courses();
+    $ids = array_map(static fn (array $row): int => (int) $row['course_id'], $courses);
+
+    if ($includeCourseId !== null && !in_array($includeCourseId, $ids, true)) {
+        $current = get_course($includeCourseId);
+        if ($current !== null) {
+            $courses[] = $current;
+        }
+    }
+
+    return $courses;
+}
+
+/**
+ * Active batches for a course, plus the student's current batch when it belongs to that course.
+ *
+ * @return list<array<string, mixed>>
+ */
+function batches_for_selection(int $courseId, ?int $includeBatchId = null): array
+{
+    $batches = list_batches_for_course($courseId);
+    $ids = array_map(static fn (array $row): int => (int) $row['batch_id'], $batches);
+
+    if ($includeBatchId !== null && !in_array($includeBatchId, $ids, true)) {
+        $current = get_batch($includeBatchId);
+        if ($current !== null && (int) $current['course_id'] === $courseId) {
+            $batches[] = $current;
+        }
+    }
+
+    foreach ($batches as &$batch) {
+        $batch['label'] = batch_choice_label($batch);
+    }
+    unset($batch);
+
+    return $batches;
 }
 
 function batch_belongs_to_course(int $batchId, int $courseId): bool
@@ -111,13 +291,62 @@ function batch_belongs_to_course(int $batchId, int $courseId): bool
     return $statement->fetch() !== false;
 }
 
+function assert_active_course_and_batch(int $courseId, int $batchId): void
+{
+    $course = get_course($courseId);
+    $batch = get_batch($batchId);
+
+    if ($course === null || $batch === null) {
+        throw new InvalidArgumentException('Select a valid course and batch.');
+    }
+
+    if (!batch_belongs_to_course($batchId, $courseId)) {
+        throw new InvalidArgumentException('Selected batch does not belong to the selected course.');
+    }
+
+    if (!course_is_open_for_new($course)) {
+        throw new InvalidArgumentException('The selected course is not active.');
+    }
+
+    if (!batch_is_open_for_new($batch)) {
+        throw new InvalidArgumentException('The selected batch is not active.');
+    }
+}
+
+function assert_course_batch_for_student_update(array $student, int $courseId, int $batchId): void
+{
+    $course = get_course($courseId);
+    $batch = get_batch($batchId);
+
+    if ($course === null || $batch === null) {
+        throw new InvalidArgumentException('Select a valid course and batch.');
+    }
+
+    if (!batch_belongs_to_course($batchId, $courseId)) {
+        throw new InvalidArgumentException('Selected batch does not belong to the selected course.');
+    }
+
+    $currentCourseId = (int) $student['course_id'];
+    $currentBatchId = (int) $student['batch_id'];
+    $keepingCurrentCourse = $courseId === $currentCourseId;
+    $keepingCurrentBatch = $batchId === $currentBatchId;
+
+    if (!$keepingCurrentCourse && !course_is_open_for_new($course)) {
+        throw new InvalidArgumentException('The selected course is not active.');
+    }
+
+    if (!$keepingCurrentBatch && !batch_is_open_for_new($batch)) {
+        throw new InvalidArgumentException('The selected batch is not active.');
+    }
+}
+
 /**
  * @return array<string, mixed>|null
  */
 function get_course(int $courseId): ?array
 {
     $statement = db()->prepare(
-        'SELECT course_id, course_code, course_name
+        'SELECT course_id, course_code, course_name, duration_years, status, created_at, updated_at
          FROM courses
          WHERE course_id = :course_id
          LIMIT 1'
@@ -134,15 +363,357 @@ function get_course(int $courseId): ?array
 function get_batch(int $batchId): ?array
 {
     $statement = db()->prepare(
-        'SELECT batch_id, course_id, batch_name
-         FROM batches
-         WHERE batch_id = :batch_id
+        'SELECT b.batch_id, b.course_id, b.batch_name, b.intake_year, b.start_date, b.end_date,
+                b.status, b.created_at, b.updated_at,
+                c.course_code, c.course_name, c.status AS course_status
+         FROM batches b
+         INNER JOIN courses c ON c.course_id = b.course_id
+         WHERE b.batch_id = :batch_id
          LIMIT 1'
     );
     $statement->execute(['batch_id' => $batchId]);
     $row = $statement->fetch();
 
     return $row === false ? null : $row;
+}
+
+function course_code_exists(string $courseCode, ?int $excludeCourseId = null): bool
+{
+    $sql = 'SELECT course_id FROM courses WHERE course_code = :course_code';
+    $params = ['course_code' => $courseCode];
+
+    if ($excludeCourseId !== null) {
+        $sql .= ' AND course_id <> :course_id';
+        $params['course_id'] = $excludeCourseId;
+    }
+
+    $statement = db()->prepare($sql . ' LIMIT 1');
+    $statement->execute($params);
+
+    return $statement->fetch() !== false;
+}
+
+function batch_name_exists_for_course(int $courseId, string $batchName, ?int $excludeBatchId = null): bool
+{
+    $sql = 'SELECT batch_id FROM batches WHERE course_id = :course_id AND batch_name = :batch_name';
+    $params = ['course_id' => $courseId, 'batch_name' => $batchName];
+
+    if ($excludeBatchId !== null) {
+        $sql .= ' AND batch_id <> :batch_id';
+        $params['batch_id'] = $excludeBatchId;
+    }
+
+    $statement = db()->prepare($sql . ' LIMIT 1');
+    $statement->execute($params);
+
+    return $statement->fetch() !== false;
+}
+
+/**
+ * @param array{course_code: string, course_name: string, duration_years: int, status: string} $data
+ */
+function create_course(array $data): int
+{
+    $payload = validate_course_payload($data);
+
+    try {
+        $statement = db()->prepare(
+            'INSERT INTO courses (course_code, course_name, duration_years, status)
+             VALUES (:course_code, :course_name, :duration_years, :status)'
+        );
+        $statement->execute($payload);
+
+        return (int) db()->lastInsertId();
+    } catch (PDOException $exception) {
+        if (is_integrity_constraint_violation($exception)) {
+            throw new InvalidArgumentException('That course code is already in use.');
+        }
+        throw $exception;
+    }
+}
+
+/**
+ * @param array{course_code: string, course_name: string, duration_years: int, status: string} $data
+ */
+function update_course(int $courseId, array $data): void
+{
+    if (get_course($courseId) === null) {
+        throw new InvalidArgumentException('Course not found.');
+    }
+
+    $payload = validate_course_payload($data, $courseId);
+    $payload['course_id'] = $courseId;
+
+    try {
+        $statement = db()->prepare(
+            'UPDATE courses
+             SET course_code = :course_code,
+                 course_name = :course_name,
+                 duration_years = :duration_years,
+                 status = :status
+             WHERE course_id = :course_id'
+        );
+        $statement->execute($payload);
+    } catch (PDOException $exception) {
+        if (is_integrity_constraint_violation($exception)) {
+            throw new InvalidArgumentException('That course code is already in use.');
+        }
+        throw $exception;
+    }
+}
+
+/**
+ * @param array<string, mixed> $data
+ * @return array{course_code: string, course_name: string, duration_years: int, status: string}
+ */
+function validate_course_payload(array $data, ?int $excludeCourseId = null): array
+{
+    $code = trim((string) ($data['course_code'] ?? ''));
+    $name = trim((string) ($data['course_name'] ?? ''));
+    $status = (string) ($data['status'] ?? '');
+    $duration = filter_var($data['duration_years'] ?? null, FILTER_VALIDATE_INT);
+
+    if ($code === '' || mb_strlen($code) > 20) {
+        throw new InvalidArgumentException('Course code is required and must be at most 20 characters.');
+    }
+
+    if ($name === '' || mb_strlen($name) > 150) {
+        throw new InvalidArgumentException('Course name is required and must be at most 150 characters.');
+    }
+
+    if ($duration === false || $duration < course_duration_min() || $duration > course_duration_max()) {
+        throw new InvalidArgumentException(
+            'Duration must be an integer between ' . course_duration_min() . ' and ' . course_duration_max() . '.'
+        );
+    }
+
+    if (!in_array($status, course_statuses(), true)) {
+        throw new InvalidArgumentException('Select a valid course status.');
+    }
+
+    if (course_code_exists($code, $excludeCourseId)) {
+        throw new InvalidArgumentException('That course code is already in use.');
+    }
+
+    return [
+        'course_code' => $code,
+        'course_name' => $name,
+        'duration_years' => $duration,
+        'status' => $status,
+    ];
+}
+
+/**
+ * @param array{search?: string, course_id?: int, status?: string} $filters
+ * @return list<array<string, mixed>>
+ */
+function list_manage_batches(array $filters = []): array
+{
+    $sql = "SELECT b.batch_id, b.course_id, b.batch_name, b.intake_year, b.start_date, b.end_date,
+                   b.status, b.created_at, b.updated_at,
+                   c.course_code, c.course_name,
+                   (SELECT COUNT(*) FROM students s WHERE s.batch_id = b.batch_id) AS student_count,
+                   (SELECT COUNT(*) FROM schedules sch WHERE sch.batch_id = b.batch_id) AS schedule_count,
+                   (SELECT COUNT(*) FROM lecture_sessions ls WHERE ls.batch_id = b.batch_id) AS session_count
+            FROM batches b
+            INNER JOIN courses c ON c.course_id = b.course_id
+            WHERE 1=1";
+    $params = [];
+
+    if (!empty($filters['search'])) {
+        $sql .= ' AND (b.batch_name LIKE :search OR c.course_code LIKE :search OR c.course_name LIKE :search)';
+        $params['search'] = '%' . $filters['search'] . '%';
+    }
+
+    if (!empty($filters['course_id'])) {
+        $sql .= ' AND b.course_id = :course_id';
+        $params['course_id'] = $filters['course_id'];
+    }
+
+    if (!empty($filters['status']) && in_array($filters['status'], batch_statuses(), true)) {
+        $sql .= ' AND b.status = :status';
+        $params['status'] = $filters['status'];
+    }
+
+    $sql .= ' ORDER BY c.course_code, b.intake_year DESC, b.batch_name';
+    $statement = db()->prepare($sql);
+    $statement->execute($params);
+
+    return $statement->fetchAll();
+}
+
+/**
+ * @return array{batch_count: int, student_count: int, module_count: int}
+ */
+function course_dependency_counts(int $courseId): array
+{
+    if (function_exists('ensure_course_modules_table')) {
+        ensure_course_modules_table();
+    }
+    $statement = db()->prepare(
+        "SELECT
+            (SELECT COUNT(*) FROM batches WHERE course_id = :course_id) AS batch_count,
+            (SELECT COUNT(*) FROM students WHERE course_id = :course_id2) AS student_count,
+            (SELECT COUNT(*) FROM course_modules WHERE course_id = :course_id3 AND status = 'ACTIVE') AS module_count"
+    );
+    $statement->execute([
+        'course_id' => $courseId,
+        'course_id2' => $courseId,
+        'course_id3' => $courseId,
+    ]);
+    $row = $statement->fetch();
+
+    return [
+        'batch_count' => (int) ($row['batch_count'] ?? 0),
+        'student_count' => (int) ($row['student_count'] ?? 0),
+        'module_count' => (int) ($row['module_count'] ?? 0),
+    ];
+}
+
+/**
+ * @return array{student_count: int, schedule_count: int, session_count: int}
+ */
+function batch_dependency_counts(int $batchId): array
+{
+    $statement = db()->prepare(
+        'SELECT
+            (SELECT COUNT(*) FROM students WHERE batch_id = :batch_id) AS student_count,
+            (SELECT COUNT(*) FROM schedules WHERE batch_id = :batch_id2) AS schedule_count,
+            (SELECT COUNT(*) FROM lecture_sessions WHERE batch_id = :batch_id3) AS session_count'
+    );
+    $statement->execute([
+        'batch_id' => $batchId,
+        'batch_id2' => $batchId,
+        'batch_id3' => $batchId,
+    ]);
+    $row = $statement->fetch();
+
+    return [
+        'student_count' => (int) ($row['student_count'] ?? 0),
+        'schedule_count' => (int) ($row['schedule_count'] ?? 0),
+        'session_count' => (int) ($row['session_count'] ?? 0),
+    ];
+}
+
+/**
+ * @param array{course_id: int, batch_name: string, intake_year: int, start_date: string, end_date?: ?string, status: string} $data
+ */
+function create_batch(array $data): int
+{
+    $courseId = (int) ($data['course_id'] ?? 0);
+    $course = $courseId > 0 ? get_course($courseId) : null;
+    if ($course === null) {
+        throw new InvalidArgumentException('Select a valid course.');
+    }
+    if (!course_is_open_for_new($course)) {
+        throw new InvalidArgumentException('Batches can only be created under an active course.');
+    }
+
+    $payload = validate_batch_payload($data, $courseId);
+
+    try {
+        $statement = db()->prepare(
+            'INSERT INTO batches (course_id, batch_name, intake_year, start_date, end_date, status)
+             VALUES (:course_id, :batch_name, :intake_year, :start_date, :end_date, :status)'
+        );
+        $statement->execute($payload);
+
+        return (int) db()->lastInsertId();
+    } catch (PDOException $exception) {
+        if (is_integrity_constraint_violation($exception)) {
+            throw new InvalidArgumentException('That batch name already exists for this course.');
+        }
+        throw $exception;
+    }
+}
+
+/**
+ * Updates a batch. course_id is never written.
+ *
+ * @param array{batch_name: string, intake_year: int, start_date: string, end_date?: ?string, status: string} $data
+ */
+function update_batch(int $batchId, array $data): void
+{
+    $batch = get_batch($batchId);
+    if ($batch === null) {
+        throw new InvalidArgumentException('Batch not found.');
+    }
+
+    $courseId = (int) $batch['course_id'];
+    $payload = validate_batch_payload($data, $courseId, $batchId);
+    unset($payload['course_id']);
+    $payload['batch_id'] = $batchId;
+
+    try {
+        $statement = db()->prepare(
+            'UPDATE batches
+             SET batch_name = :batch_name,
+                 intake_year = :intake_year,
+                 start_date = :start_date,
+                 end_date = :end_date,
+                 status = :status
+             WHERE batch_id = :batch_id'
+        );
+        $statement->execute($payload);
+    } catch (PDOException $exception) {
+        if (is_integrity_constraint_violation($exception)) {
+            throw new InvalidArgumentException('That batch name already exists for this course.');
+        }
+        throw $exception;
+    }
+}
+
+/**
+ * @param array<string, mixed> $data
+ * @return array{course_id: int, batch_name: string, intake_year: int, start_date: string, end_date: ?string, status: string}
+ */
+function validate_batch_payload(array $data, int $courseId, ?int $excludeBatchId = null): array
+{
+    $name = trim((string) ($data['batch_name'] ?? ''));
+    $status = (string) ($data['status'] ?? '');
+    $year = filter_var($data['intake_year'] ?? null, FILTER_VALIDATE_INT);
+    $start = trim((string) ($data['start_date'] ?? ''));
+    $endRaw = trim((string) ($data['end_date'] ?? ''));
+    $end = $endRaw === '' ? null : $endRaw;
+
+    if ($name === '' || mb_strlen($name) > 100) {
+        throw new InvalidArgumentException('Batch name is required and must be at most 100 characters.');
+    }
+
+    if ($year === false || $year < intake_year_min() || $year > intake_year_max()) {
+        throw new InvalidArgumentException(
+            'Intake year must be between ' . intake_year_min() . ' and ' . intake_year_max() . '.'
+        );
+    }
+
+    if ($start === '' || !validate_date_ymd($start)) {
+        throw new InvalidArgumentException('Enter a valid start date.');
+    }
+
+    if ($end !== null && !validate_date_ymd($end)) {
+        throw new InvalidArgumentException('Enter a valid end date.');
+    }
+
+    if ($end !== null && $end < $start) {
+        throw new InvalidArgumentException('End date must be on or after the start date.');
+    }
+
+    if (!in_array($status, batch_statuses(), true)) {
+        throw new InvalidArgumentException('Select a valid batch status.');
+    }
+
+    if (batch_name_exists_for_course($courseId, $name, $excludeBatchId)) {
+        throw new InvalidArgumentException('That batch name already exists for this course.');
+    }
+
+    return [
+        'course_id' => $courseId,
+        'batch_name' => $name,
+        'intake_year' => $year,
+        'start_date' => $start,
+        'end_date' => $end,
+        'status' => $status,
+    ];
 }
 
 function username_exists(string $username, ?int $excludeUserId = null): bool
@@ -449,6 +1020,24 @@ function get_student(int $studentId): ?array
     return $row === false ? null : $row;
 }
 
+function resolve_inserted_student_id(PDO $pdo, int $userId): int
+{
+    $fromInsert = (int) $pdo->lastInsertId();
+    $statement = $pdo->prepare(
+        'SELECT student_id FROM students WHERE user_id = :user_id LIMIT 1'
+    );
+    $statement->execute(['user_id' => $userId]);
+    $resolved = (int) $statement->fetchColumn();
+    if ($resolved > 0) {
+        return $resolved;
+    }
+    if ($fromInsert > 0 && $fromInsert !== $userId) {
+        return $fromInsert;
+    }
+
+    throw new RuntimeException('Unable to resolve the new student id after insert.');
+}
+
 /**
  * @param array<string, mixed> $data
  */
@@ -466,9 +1055,7 @@ function register_student(array $data): int
         throw new InvalidArgumentException('Registration number is already in use.');
     }
 
-    if (!batch_belongs_to_course((int) $data['batch_id'], (int) $data['course_id'])) {
-        throw new InvalidArgumentException('Selected batch does not belong to the selected course.');
-    }
+    assert_active_course_and_batch((int) $data['course_id'], (int) $data['batch_id']);
 
     $pdo = db();
     $pdo->beginTransaction();
@@ -509,7 +1096,10 @@ function register_student(array $data): int
             'status' => $data['status'],
         ]);
 
-        $studentId = (int) $pdo->lastInsertId();
+        $studentId = resolve_inserted_student_id($pdo, $userId);
+        if (($data['status'] ?? '') === 'ACTIVE') {
+            auto_enrol_student_into_batch_modules($studentId, $pdo);
+        }
         $pdo->commit();
 
         return $studentId;
@@ -539,9 +1129,7 @@ function update_student(int $studentId, array $data): void
         throw new InvalidArgumentException('Email is already in use.');
     }
 
-    if (!batch_belongs_to_course((int) $data['batch_id'], (int) $data['course_id'])) {
-        throw new InvalidArgumentException('Selected batch does not belong to the selected course.');
-    }
+    assert_course_batch_for_student_update($student, (int) $data['course_id'], (int) $data['batch_id']);
 
     $pdo = db();
     $pdo->beginTransaction();
@@ -583,6 +1171,10 @@ function update_student(int $studentId, array $data): void
             'status' => $data['status'],
             'student_id' => $studentId,
         ]);
+
+        if (($data['status'] ?? '') === 'ACTIVE') {
+            auto_enrol_student_into_batch_modules($studentId, $pdo);
+        }
 
         $pdo->commit();
     } catch (Throwable $exception) {
@@ -955,7 +1547,9 @@ function management_nav_items(string $role): array
             ['label' => 'Student Management', 'href' => app_url('admin/students/index.php')],
             ['label' => 'Lecturer Management', 'href' => app_url('admin/lecturers/index.php')],
             ['label' => 'Academic Staff', 'href' => app_url('admin/academic-staff/index.php')],
-            ['label' => 'Modules', 'href' => app_url('admin/modules/index.php')],
+            ['label' => 'Courses', 'href' => app_url('admin/courses/index.php')],
+            ['label' => 'Batches', 'href' => app_url('admin/batches/index.php')],
+            ['label' => 'Module Catalogue', 'href' => app_url('admin/modules/index.php')],
             ['label' => 'Lecturer Assignments', 'href' => app_url('admin/module-assignments/index.php')],
             ['label' => 'Module Enrollment', 'href' => app_url('admin/enrollments/index.php')],
             ['label' => 'Timetable', 'href' => app_url('admin/schedules/index.php')],
@@ -971,7 +1565,9 @@ function management_nav_items(string $role): array
             ['label' => 'Dashboard', 'href' => app_url('academic-staff/dashboard.php')],
             ['label' => 'Student Management', 'href' => app_url('academic-staff/students/index.php')],
             ['label' => 'Lecturers', 'href' => app_url('academic-staff/lecturers/index.php')],
-            ['label' => 'Modules', 'href' => app_url('academic-staff/modules/index.php')],
+            ['label' => 'Courses', 'href' => app_url('academic-staff/courses/index.php')],
+            ['label' => 'Batches', 'href' => app_url('academic-staff/batches/index.php')],
+            ['label' => 'Module Catalogue', 'href' => app_url('academic-staff/modules/index.php')],
             ['label' => 'Lecturer Assignments', 'href' => app_url('academic-staff/module-assignments/index.php')],
             ['label' => 'Module Enrollment', 'href' => app_url('academic-staff/enrollments/index.php')],
             ['label' => 'Timetable', 'href' => app_url('academic-staff/schedules/index.php')],
@@ -986,7 +1582,7 @@ function management_nav_items(string $role): array
         'LECTURER' => [
             ['label' => 'Dashboard', 'href' => app_url('lecturer/dashboard.php')],
             ['label' => 'Students', 'href' => app_url('lecturer/students/index.php')],
-            ['label' => 'My Timetable', 'href' => app_url('lecturer/schedules/index.php')],
+            ['label' => 'My Calendar', 'href' => app_url('lecturer/schedules/index.php')],
             ['label' => 'Lecture Sessions', 'href' => app_url('lecturer/sessions/index.php')],
             ['label' => 'Attendance Reports', 'href' => app_url('lecturer/attendance/reports.php')],
             ['label' => 'Coursework Assignments', 'href' => app_url('lecturer/assignments/index.php')],

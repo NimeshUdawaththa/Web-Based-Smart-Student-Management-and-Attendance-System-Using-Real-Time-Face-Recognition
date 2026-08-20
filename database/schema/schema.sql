@@ -172,11 +172,10 @@ CREATE TABLE academic_staff (
 
 -- -----------------------------------------------------------------------------
 -- 7. modules
--- Modules/subjects belonging to a course.
+-- Independent Module Catalogue. A module may be linked to many courses.
 -- -----------------------------------------------------------------------------
 CREATE TABLE modules (
   module_id INT UNSIGNED NOT NULL AUTO_INCREMENT,
-  course_id INT UNSIGNED NOT NULL,
   module_code VARCHAR(20) NOT NULL,
   module_name VARCHAR(150) NOT NULL,
   credits DECIMAL(4,1) NOT NULL,
@@ -185,12 +184,31 @@ CREATE TABLE modules (
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (module_id),
-  UNIQUE KEY uq_modules_course_code (course_id, module_code),
-  KEY idx_modules_semester (course_id, semester),
+  UNIQUE KEY uq_modules_code (module_code),
+  KEY idx_modules_semester (semester),
   CONSTRAINT chk_modules_credits CHECK (credits > 0),
-  CONSTRAINT chk_modules_semester CHECK (semester > 0),
-  CONSTRAINT fk_modules_course
+  CONSTRAINT chk_modules_semester CHECK (semester > 0)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- -----------------------------------------------------------------------------
+-- 7b. course_modules
+-- Which catalogue modules a course currently uses. Rows are never hard-deleted.
+-- -----------------------------------------------------------------------------
+CREATE TABLE course_modules (
+  course_module_id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  course_id INT UNSIGNED NOT NULL,
+  module_id INT UNSIGNED NOT NULL,
+  status ENUM('ACTIVE', 'INACTIVE') NOT NULL DEFAULT 'ACTIVE',
+  assigned_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (course_module_id),
+  UNIQUE KEY uq_course_modules_course_module (course_id, module_id),
+  KEY idx_course_modules_module (module_id),
+  CONSTRAINT fk_course_modules_course
     FOREIGN KEY (course_id) REFERENCES courses (course_id)
+    ON DELETE RESTRICT
+    ON UPDATE CASCADE,
+  CONSTRAINT fk_course_modules_module
+    FOREIGN KEY (module_id) REFERENCES modules (module_id)
     ON DELETE RESTRICT
     ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -213,6 +231,30 @@ CREATE TABLE student_modules (
     ON DELETE RESTRICT
     ON UPDATE CASCADE,
   CONSTRAINT fk_student_modules_module
+    FOREIGN KEY (module_id) REFERENCES modules (module_id)
+    ON DELETE RESTRICT
+    ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- -----------------------------------------------------------------------------
+-- 8b. batch_modules
+-- Which modules a batch currently takes. Subset of ACTIVE course_modules for the batch's course.
+-- status INACTIVE means unassigned going forward; rows are never hard-deleted.
+-- -----------------------------------------------------------------------------
+CREATE TABLE batch_modules (
+  batch_module_id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  batch_id INT UNSIGNED NOT NULL,
+  module_id INT UNSIGNED NOT NULL,
+  status ENUM('ACTIVE', 'INACTIVE') NOT NULL DEFAULT 'ACTIVE',
+  assigned_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (batch_module_id),
+  UNIQUE KEY uq_batch_modules_batch_module (batch_id, module_id),
+  KEY idx_batch_modules_module (module_id),
+  CONSTRAINT fk_batch_modules_batch
+    FOREIGN KEY (batch_id) REFERENCES batches (batch_id)
+    ON DELETE RESTRICT
+    ON UPDATE CASCADE,
+  CONSTRAINT fk_batch_modules_module
     FOREIGN KEY (module_id) REFERENCES modules (module_id)
     ON DELETE RESTRICT
     ON UPDATE CASCADE

@@ -16,9 +16,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const refresh = () => {
         const moduleId = moduleSelect.value;
-        const courseId = options.modules ? options.modules[moduleId] : null;
+        const courseIdsRaw = options.modules ? options.modules[moduleId] : [];
+        const courseIds = Array.isArray(courseIdsRaw)
+            ? courseIdsRaw
+            : (courseIdsRaw ? [courseIdsRaw] : []);
         const lecturers = (options.lecturers && options.lecturers[moduleId]) ? options.lecturers[moduleId] : [];
-        const batches = (courseId && options.batches && options.batches[courseId]) ? options.batches[courseId] : [];
+        let batches = [];
+        courseIds.forEach((courseId) => {
+            const courseBatches = (options.batches && options.batches[courseId]) ? options.batches[courseId] : [];
+            courseBatches.forEach((batch) => {
+                if (!batches.some((item) => String(item.batch_id) === String(batch.batch_id))) {
+                    batches.push(batch);
+                }
+            });
+        });
         const selectedLecturer = lecturerSelect.value || options.selectedLecturer || '';
         const selectedBatch = batchSelect.value || options.selectedBatch || '';
 

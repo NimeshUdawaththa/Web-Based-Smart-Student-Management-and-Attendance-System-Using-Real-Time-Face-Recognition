@@ -41,3 +41,68 @@ body {
         min-height: auto;
     }
 }
+
+.lecturer-cal-grid-card .table {
+    table-layout: fixed;
+}
+
+.lecturer-cal-cell {
+    vertical-align: top;
+    min-height: 7rem;
+    width: 14.28%;
+}
+
+.lecturer-cal-cell--muted {
+    background-color: #f8f9fa;
+}
+
+.lecturer-cal-cell--today {
+    background-color: rgba(13, 110, 253, 0.06);
+}
+
+.lecturer-cal-day-number {
+    color: inherit;
+}
+
+.lecturer-cal-events {
+    min-height: 3rem;
+}
+
+.lecturer-cal-event {
+    display: block;
+    cursor: pointer;
+}
+
+.lecturer-cal-event-card {
+    transition: box-shadow 0.15s ease-in-out;
+}
+
+.lecturer-cal-event-card:hover,
+.lecturer-cal-event:hover {
+    box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+}
+
+.lecturer-cal-event--scheduled {
+    background-color: rgba(13, 110, 253, 0.08);
+    border-left: 3px solid #0d6efd;
+}
+
+.lecturer-cal-event--in-progress {
+    background-color: rgba(25, 135, 84, 0.1);
+    border-left: 3px solid #198754;
+}
+
+.lecturer-cal-event--completed {
+    background-color: rgba(108, 117, 125, 0.1);
+    border-left: 3px solid #6c757d;
+}
+
+.lecturer-cal-event--cancelled {
+    background-color: rgba(220, 53, 69, 0.08);
+    border-left: 3px solid #dc3545;
+    opacity: 0.85;
+}
+
+.lecturer-cal-event--cancelled .fw-semibold {
+    text-decoration: line-through;
+}

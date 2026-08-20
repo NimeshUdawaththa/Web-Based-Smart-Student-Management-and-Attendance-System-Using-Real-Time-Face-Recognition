@@ -139,7 +139,7 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
                     <?php foreach ($assignments as $assignment): ?>
                         <tr>
                             <td><?= e($assignment['module_code'] . ' – ' . $assignment['module_name']) ?></td>
-                            <td><?= e($assignment['course_code']) ?></td>
+                            <td><?= e($assignment['course_code'] ?: '—') ?></td>
                             <td><?= e($assignment['first_name'] . ' ' . $assignment['last_name']) ?></td>
                             <td><?= e($assignment['staff_no']) ?></td>
                             <td><?= e((string) $assignment['assigned_at']) ?></td>

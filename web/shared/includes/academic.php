@@ -572,26 +572,452 @@ function list_batches(?int $courseId = null, bool $activeOnly = false): array
 }
 
 /**
- * @param array{search?: string, course_id?: int, status?: string} $filters
+ * @return array{exists: bool, nullable: bool}
+ */
+function modules_legacy_course_id_meta(bool $refresh = false): array
+{
+    static $meta = null;
+    if ($refresh) {
+        $meta = null;
+    }
+    if ($meta !== null) {
+        return $meta;
+    }
+
+    $statement = db()->query(
+        "SELECT IS_NULLABLE
+         FROM information_schema.COLUMNS
+         WHERE TABLE_SCHEMA = DATABASE()
+           AND TABLE_NAME = 'modules'
+           AND COLUMN_NAME = 'course_id'
+         LIMIT 1"
+    );
+    $row = $statement === false ? false : $statement->fetch();
+    if ($row === false) {
+        $meta = ['exists' => false, 'nullable' => true];
+        return $meta;
+    }
+
+    $meta = [
+        'exists' => true,
+        'nullable' => strtoupper((string) $row['IS_NULLABLE']) === 'YES',
+    ];
+
+    return $meta;
+}
+
+function schema_table_exists(string $table): bool
+{
+    $statement = db()->prepare(
+        'SELECT COUNT(*) FROM information_schema.TABLES
+         WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = :table_name'
+    );
+    $statement->execute(['table_name' => $table]);
+
+    return (int) $statement->fetchColumn() > 0;
+}
+
+function schema_index_exists(string $table, string $indexName): bool
+{
+    $statement = db()->prepare(
+        'SELECT COUNT(*) FROM information_schema.STATISTICS
+         WHERE TABLE_SCHEMA = DATABASE()
+           AND TABLE_NAME = :table_name
+           AND INDEX_NAME = :index_name'
+    );
+    $statement->execute([
+        'table_name' => $table,
+        'index_name' => $indexName,
+    ]);
+
+    return (int) $statement->fetchColumn() > 0;
+}
+
+function schema_constraint_exists(string $table, string $constraintName): bool
+{
+    $statement = db()->prepare(
+        'SELECT COUNT(*) FROM information_schema.TABLE_CONSTRAINTS
+         WHERE TABLE_SCHEMA = DATABASE()
+           AND TABLE_NAME = :table_name
+           AND CONSTRAINT_NAME = :constraint_name'
+    );
+    $statement->execute([
+        'table_name' => $table,
+        'constraint_name' => $constraintName,
+    ]);
+
+    return (int) $statement->fetchColumn() > 0;
+}
+
+function ensure_course_modules_table(): bool
+{
+    if (schema_table_exists('course_modules')) {
+        backfill_course_modules_from_legacy_course_id();
+        return false;
+    }
+
+    db()->exec(
+        "CREATE TABLE course_modules (
+          course_module_id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+          course_id INT UNSIGNED NOT NULL,
+          module_id INT UNSIGNED NOT NULL,
+          status ENUM('ACTIVE', 'INACTIVE') NOT NULL DEFAULT 'ACTIVE',
+          assigned_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          PRIMARY KEY (course_module_id),
+          UNIQUE KEY uq_course_modules_course_module (course_id, module_id),
+          KEY idx_course_modules_module (module_id),
+          CONSTRAINT fk_course_modules_course
+            FOREIGN KEY (course_id) REFERENCES courses (course_id)
+            ON DELETE RESTRICT
+            ON UPDATE CASCADE,
+          CONSTRAINT fk_course_modules_module
+            FOREIGN KEY (module_id) REFERENCES modules (module_id)
+            ON DELETE RESTRICT
+            ON UPDATE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+    );
+
+    backfill_course_modules_from_legacy_course_id();
+
+    return true;
+}
+
+function backfill_course_modules_from_legacy_course_id(): int
+{
+    if (!schema_table_exists('course_modules')) {
+        return 0;
+    }
+    $meta = modules_legacy_course_id_meta();
+    if (!$meta['exists']) {
+        return 0;
+    }
+
+    $statement = db()->query(
+        "INSERT INTO course_modules (course_id, module_id, status, assigned_at)
+         SELECT m.course_id, m.module_id, 'ACTIVE', m.created_at
+         FROM modules m
+         WHERE m.course_id IS NOT NULL
+           AND NOT EXISTS (
+             SELECT 1 FROM course_modules cm
+             WHERE cm.course_id = m.course_id AND cm.module_id = m.module_id
+           )"
+    );
+
+    return $statement === false ? 0 : $statement->rowCount();
+}
+
+/**
+ * @return list<string>
+ */
+function duplicate_module_codes(): array
+{
+    $statement = db()->query(
+        'SELECT module_code FROM modules GROUP BY module_code HAVING COUNT(*) > 1'
+    );
+    if ($statement === false) {
+        return [];
+    }
+
+    return $statement->fetchAll(PDO::FETCH_COLUMN);
+}
+
+function ensure_modules_catalogue_ready(): void
+{
+    $duplicates = duplicate_module_codes();
+    if ($duplicates !== []) {
+        throw new RuntimeException(
+            'Cannot make module_code globally unique; duplicates exist: ' . implode(', ', $duplicates)
+        );
+    }
+
+    if (!schema_index_exists('modules', 'uq_modules_code')) {
+        db()->exec('ALTER TABLE modules ADD UNIQUE KEY uq_modules_code (module_code)');
+    }
+
+    $meta = modules_legacy_course_id_meta();
+    if ($meta['exists'] && !$meta['nullable']) {
+        db()->exec('ALTER TABLE modules MODIFY course_id INT UNSIGNED NULL');
+        modules_legacy_course_id_meta(true);
+    }
+}
+
+function drop_modules_course_id_column(): bool
+{
+    ensure_course_modules_table();
+    backfill_course_modules_from_legacy_course_id();
+    ensure_modules_catalogue_ready();
+
+    $meta = modules_legacy_course_id_meta();
+    if (!$meta['exists']) {
+        if (!schema_index_exists('modules', 'idx_modules_semester')) {
+            db()->exec('ALTER TABLE modules ADD KEY idx_modules_semester (semester)');
+        }
+
+        return false;
+    }
+
+    if (schema_constraint_exists('modules', 'fk_modules_course')) {
+        db()->exec('ALTER TABLE modules DROP FOREIGN KEY fk_modules_course');
+    }
+    if (schema_index_exists('modules', 'uq_modules_course_code')) {
+        db()->exec('ALTER TABLE modules DROP INDEX uq_modules_course_code');
+    }
+    if (schema_index_exists('modules', 'idx_modules_semester')) {
+        db()->exec('ALTER TABLE modules DROP INDEX idx_modules_semester');
+    }
+
+    db()->exec('ALTER TABLE modules DROP COLUMN course_id');
+    modules_legacy_course_id_meta(true);
+
+    if (!schema_index_exists('modules', 'idx_modules_semester')) {
+        db()->exec('ALTER TABLE modules ADD KEY idx_modules_semester (semester)');
+    }
+
+    return true;
+}
+
+function course_has_module(int $courseId, int $moduleId, bool $activeOnly = true): bool
+{
+    ensure_course_modules_table();
+    $sql = 'SELECT course_module_id FROM course_modules
+            WHERE course_id = :course_id AND module_id = :module_id';
+    if ($activeOnly) {
+        $sql .= " AND status = 'ACTIVE'";
+    }
+    $statement = db()->prepare($sql . ' LIMIT 1');
+    $statement->execute([
+        'course_id' => $courseId,
+        'module_id' => $moduleId,
+    ]);
+
+    return $statement->fetch() !== false;
+}
+
+/**
+ * @return list<int>
+ */
+function list_active_course_ids_for_module(int $moduleId): array
+{
+    ensure_course_modules_table();
+    $statement = db()->prepare(
+        "SELECT course_id FROM course_modules
+         WHERE module_id = :module_id AND status = 'ACTIVE'
+         ORDER BY course_id"
+    );
+    $statement->execute(['module_id' => $moduleId]);
+
+    return array_map('intval', $statement->fetchAll(PDO::FETCH_COLUMN));
+}
+
+function module_is_valid_for_batch_course(int $batchId, int $moduleId): bool
+{
+    $batch = get_batch($batchId);
+    if ($batch === null) {
+        return false;
+    }
+
+    $module = get_module($moduleId);
+    if ($module === null || ($module['status'] ?? '') !== 'ACTIVE') {
+        return false;
+    }
+
+    return course_has_module((int) $batch['course_id'], $moduleId, true);
+}
+
+/**
+ * @return list<array<string, mixed>>
+ */
+function list_course_module_rows(int $courseId): array
+{
+    ensure_course_modules_table();
+    $statement = db()->prepare(
+        "SELECT cm.course_module_id, cm.course_id, cm.module_id, cm.status, cm.assigned_at,
+                m.module_code, m.module_name, m.credits, m.semester, m.status AS module_status
+         FROM course_modules cm
+         INNER JOIN modules m ON m.module_id = cm.module_id
+         WHERE cm.course_id = :course_id
+         ORDER BY m.semester, m.module_code"
+    );
+    $statement->execute(['course_id' => $courseId]);
+
+    return $statement->fetchAll();
+}
+
+/**
+ * @return list<array<string, mixed>>
+ */
+function list_active_course_modules(int $courseId): array
+{
+    ensure_course_modules_table();
+    $statement = db()->prepare(
+        "SELECT cm.course_module_id, cm.course_id, cm.module_id, cm.status, cm.assigned_at,
+                m.module_code, m.module_name, m.credits, m.semester, m.status AS module_status
+         FROM course_modules cm
+         INNER JOIN modules m ON m.module_id = cm.module_id
+         WHERE cm.course_id = :course_id
+           AND cm.status = 'ACTIVE'
+           AND m.status = 'ACTIVE'
+         ORDER BY m.semester, m.module_code"
+    );
+    $statement->execute(['course_id' => $courseId]);
+
+    return $statement->fetchAll();
+}
+
+/**
+ * @return list<array<string, mixed>>
+ */
+function list_modules_for_course_assignment(int $courseId): array
+{
+    $catalogue = list_modules(['status' => 'ACTIVE']);
+    $assigned = [];
+    foreach (list_course_module_rows($courseId) as $row) {
+        $assigned[(int) $row['module_id']] = $row;
+    }
+
+    $visible = [];
+    $seen = [];
+    foreach ($catalogue as $module) {
+        $moduleId = (int) $module['module_id'];
+        $seen[$moduleId] = true;
+        $assignment = $assigned[$moduleId] ?? null;
+        $module['course_module_id'] = $assignment['course_module_id'] ?? null;
+        $module['course_module_status'] = $assignment['status'] ?? null;
+        $module['is_assigned'] = $assignment !== null && $assignment['status'] === 'ACTIVE';
+        $visible[] = $module;
+    }
+
+    foreach ($assigned as $moduleId => $row) {
+        if (isset($seen[$moduleId]) || $row['status'] !== 'ACTIVE') {
+            continue;
+        }
+        $module = get_module($moduleId);
+        if ($module === null) {
+            continue;
+        }
+        $module['course_module_id'] = $row['course_module_id'];
+        $module['course_module_status'] = $row['status'];
+        $module['is_assigned'] = true;
+        $visible[] = $module;
+    }
+
+    return $visible;
+}
+
+/**
+ * @param list<mixed> $selectedModuleIds
+ */
+function save_course_module_selection(int $courseId, array $selectedModuleIds): void
+{
+    ensure_course_modules_table();
+    $course = get_course($courseId);
+    if ($course === null) {
+        throw new InvalidArgumentException('Course not found.');
+    }
+
+    $normalized = [];
+    foreach ($selectedModuleIds as $rawId) {
+        $moduleId = positive_int($rawId);
+        if ($moduleId === null) {
+            throw new InvalidArgumentException('Select valid modules.');
+        }
+        $normalized[$moduleId] = $moduleId;
+    }
+    $selected = array_values($normalized);
+
+    foreach ($selected as $moduleId) {
+        $module = get_module($moduleId);
+        if ($module === null) {
+            throw new InvalidArgumentException('Select a valid module.');
+        }
+        if ($module['status'] !== 'ACTIVE') {
+            throw new InvalidArgumentException('Only active catalogue modules can be assigned to a course.');
+        }
+    }
+
+    $existing = [];
+    foreach (list_course_module_rows($courseId) as $row) {
+        $existing[(int) $row['module_id']] = $row;
+    }
+
+    $pdo = db();
+    $started = false;
+    if (!$pdo->inTransaction()) {
+        $pdo->beginTransaction();
+        $started = true;
+    }
+
+    try {
+        foreach ($selected as $moduleId) {
+            if (!isset($existing[$moduleId])) {
+                $insert = $pdo->prepare(
+                    "INSERT INTO course_modules (course_id, module_id, status)
+                     VALUES (:course_id, :module_id, 'ACTIVE')"
+                );
+                $insert->execute([
+                    'course_id' => $courseId,
+                    'module_id' => $moduleId,
+                ]);
+                continue;
+            }
+
+            if ($existing[$moduleId]['status'] !== 'ACTIVE') {
+                $update = $pdo->prepare(
+                    "UPDATE course_modules SET status = 'ACTIVE' WHERE course_module_id = :id"
+                );
+                $update->execute(['id' => $existing[$moduleId]['course_module_id']]);
+            }
+        }
+
+        foreach ($existing as $moduleId => $row) {
+            if (!in_array($moduleId, $selected, true) && $row['status'] === 'ACTIVE') {
+                $update = $pdo->prepare(
+                    "UPDATE course_modules SET status = 'INACTIVE' WHERE course_module_id = :id"
+                );
+                $update->execute(['id' => $row['course_module_id']]);
+            }
+        }
+
+        if ($started) {
+            $pdo->commit();
+        }
+    } catch (Throwable $exception) {
+        if ($started && $pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        throw $exception;
+    }
+}
+
+/**
+ * @param array{search?: string, course_id?: int, status?: string, course_module_status?: string} $filters
  * @return list<array<string, mixed>>
  */
 function list_modules(array $filters = []): array
 {
-    $sql = "SELECT m.module_id, m.course_id, m.module_code, m.module_name, m.credits, m.semester, m.status,
-                   c.course_code, c.course_name
-            FROM modules m
-            INNER JOIN courses c ON c.course_id = m.course_id
-            WHERE 1=1";
+    ensure_course_modules_table();
+    $sql = "SELECT m.module_id, m.module_code, m.module_name, m.credits, m.semester, m.status,
+                   (SELECT COUNT(*) FROM course_modules cmc
+                    WHERE cmc.module_id = m.module_id AND cmc.status = 'ACTIVE') AS course_count";
     $params = [];
+
+    if (!empty($filters['course_id'])) {
+        $sql .= ", cm.status AS course_module_status, cm.assigned_at
+                 FROM modules m
+                 INNER JOIN course_modules cm ON cm.module_id = m.module_id AND cm.course_id = :course_id
+                 WHERE 1=1";
+        $params['course_id'] = (int) $filters['course_id'];
+        if (!empty($filters['course_module_status']) && in_array($filters['course_module_status'], ['ACTIVE', 'INACTIVE'], true)) {
+            $sql .= ' AND cm.status = :course_module_status';
+            $params['course_module_status'] = $filters['course_module_status'];
+        }
+    } else {
+        $sql .= ' FROM modules m WHERE 1=1';
+    }
 
     if (!empty($filters['search'])) {
         $sql .= ' AND (m.module_code LIKE :search OR m.module_name LIKE :search)';
         $params['search'] = '%' . $filters['search'] . '%';
-    }
-
-    if (!empty($filters['course_id'])) {
-        $sql .= ' AND m.course_id = :course_id';
-        $params['course_id'] = $filters['course_id'];
     }
 
     if (!empty($filters['status']) && in_array($filters['status'], module_statuses(), true)) {
@@ -599,7 +1025,7 @@ function list_modules(array $filters = []): array
         $params['status'] = $filters['status'];
     }
 
-    $sql .= ' ORDER BY c.course_code, m.semester, m.module_code';
+    $sql .= ' ORDER BY m.semester, m.module_code';
     $statement = db()->prepare($sql);
     $statement->execute($params);
 
@@ -611,11 +1037,12 @@ function list_modules(array $filters = []): array
  */
 function get_module(int $moduleId): ?array
 {
+    ensure_course_modules_table();
     $statement = db()->prepare(
-        "SELECT m.module_id, m.course_id, m.module_code, m.module_name, m.credits, m.semester, m.status,
-                c.course_code, c.course_name
+        "SELECT m.module_id, m.module_code, m.module_name, m.credits, m.semester, m.status,
+                (SELECT COUNT(*) FROM course_modules cm
+                 WHERE cm.module_id = m.module_id AND cm.status = 'ACTIVE') AS course_count
          FROM modules m
-         INNER JOIN courses c ON c.course_id = m.course_id
          WHERE m.module_id = :module_id
          LIMIT 1"
     );
@@ -626,52 +1053,153 @@ function get_module(int $moduleId): ?array
 }
 
 /**
- * @param array{course_id: int, module_code: string, module_name: string, credits: float, semester: int, status: string} $data
+ * @param array{module_code: string, module_name: string, credits: mixed, semester: mixed, status: string} $data
+ * @return array{module_code: string, module_name: string, credits: float, semester: int, status: string}
  */
-function create_module(array $data): int
+function validate_module_payload(array $data, ?int $excludeModuleId = null): array
 {
-    $statement = db()->prepare(
-        "INSERT INTO modules (course_id, module_code, module_name, credits, semester, status)
-         VALUES (:course_id, :module_code, :module_name, :credits, :semester, :status)"
-    );
-    $statement->execute([
-        'course_id' => $data['course_id'],
-        'module_code' => $data['module_code'],
-        'module_name' => $data['module_name'],
-        'credits' => $data['credits'],
-        'semester' => $data['semester'],
-        'status' => $data['status'],
-    ]);
+    $code = trim((string) ($data['module_code'] ?? ''));
+    $name = trim((string) ($data['module_name'] ?? ''));
+    $status = (string) ($data['status'] ?? 'ACTIVE');
+    $credits = filter_var($data['credits'] ?? null, FILTER_VALIDATE_FLOAT);
+    $semester = filter_var($data['semester'] ?? null, FILTER_VALIDATE_INT);
 
-    return (int) db()->lastInsertId();
+    if ($code === '' || $name === '') {
+        throw new InvalidArgumentException('Module code and name are required.');
+    }
+
+    if (mb_strlen($code) > 20) {
+        throw new InvalidArgumentException('Module code must be at most 20 characters.');
+    }
+
+    if (mb_strlen($name) > 150) {
+        throw new InvalidArgumentException('Module name must be at most 150 characters.');
+    }
+
+    if ($credits === false || $credits <= 0) {
+        throw new InvalidArgumentException('Credits must be greater than 0.');
+    }
+
+    if ($semester === false || $semester < 1) {
+        throw new InvalidArgumentException('Semester must be 1 or greater.');
+    }
+
+    if (!in_array($status, module_statuses(), true)) {
+        throw new InvalidArgumentException('Select a valid status.');
+    }
+
+    if (module_code_exists($code, $excludeModuleId)) {
+        throw new InvalidArgumentException('That module code already exists in the catalogue.');
+    }
+
+    return [
+        'module_code' => $code,
+        'module_name' => $name,
+        'credits' => $credits,
+        'semester' => $semester,
+        'status' => $status,
+    ];
 }
 
 /**
- * @param array{course_id: int, module_code: string, module_name: string, credits: float, semester: int, status: string} $data
+ * @param array{module_code: string, module_name: string, credits: mixed, semester: mixed, status: string, course_id?: int} $data
+ */
+function create_module(array $data): int
+{
+    ensure_course_modules_table();
+    ensure_modules_catalogue_ready();
+    $payload = validate_module_payload($data);
+    $legacyCourseId = positive_int($data['course_id'] ?? null);
+    if ($legacyCourseId !== null && get_course($legacyCourseId) === null) {
+        throw new InvalidArgumentException('Select a valid course.');
+    }
+
+    $meta = modules_legacy_course_id_meta();
+    $pdo = db();
+    $started = false;
+    if (!$pdo->inTransaction()) {
+        $pdo->beginTransaction();
+        $started = true;
+    }
+
+    try {
+        if ($meta['exists']) {
+            $statement = $pdo->prepare(
+                'INSERT INTO modules (course_id, module_code, module_name, credits, semester, status)
+                 VALUES (:course_id, :module_code, :module_name, :credits, :semester, :status)'
+            );
+            $statement->execute([
+                'course_id' => $legacyCourseId,
+                'module_code' => $payload['module_code'],
+                'module_name' => $payload['module_name'],
+                'credits' => $payload['credits'],
+                'semester' => $payload['semester'],
+                'status' => $payload['status'],
+            ]);
+        } else {
+            $statement = $pdo->prepare(
+                'INSERT INTO modules (module_code, module_name, credits, semester, status)
+                 VALUES (:module_code, :module_name, :credits, :semester, :status)'
+            );
+            $statement->execute($payload);
+        }
+
+        $moduleId = (int) $pdo->lastInsertId();
+        if ($legacyCourseId !== null) {
+            $link = $pdo->prepare(
+                "INSERT INTO course_modules (course_id, module_id, status)
+                 VALUES (:course_id, :module_id, 'ACTIVE')"
+            );
+            $link->execute([
+                'course_id' => $legacyCourseId,
+                'module_id' => $moduleId,
+            ]);
+        }
+
+        if ($started) {
+            $pdo->commit();
+        }
+
+        return $moduleId;
+    } catch (Throwable $exception) {
+        if ($started && $pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        throw $exception;
+    }
+}
+
+/**
+ * @param array{module_code: string, module_name: string, credits: mixed, semester: mixed, status: string} $data
  */
 function update_module(int $moduleId, array $data): void
 {
+    $existing = get_module($moduleId);
+    if ($existing === null) {
+        throw new InvalidArgumentException('Module not found.');
+    }
+
+    $payload = validate_module_payload($data, $moduleId);
     $statement = db()->prepare(
-        "UPDATE modules
-         SET course_id = :course_id, module_code = :module_code, module_name = :module_name,
+        'UPDATE modules
+         SET module_code = :module_code, module_name = :module_name,
              credits = :credits, semester = :semester, status = :status
-         WHERE module_id = :module_id"
+         WHERE module_id = :module_id'
     );
     $statement->execute([
-        'course_id' => $data['course_id'],
-        'module_code' => $data['module_code'],
-        'module_name' => $data['module_name'],
-        'credits' => $data['credits'],
-        'semester' => $data['semester'],
-        'status' => $data['status'],
+        'module_code' => $payload['module_code'],
+        'module_name' => $payload['module_name'],
+        'credits' => $payload['credits'],
+        'semester' => $payload['semester'],
+        'status' => $payload['status'],
         'module_id' => $moduleId,
     ]);
 }
 
-function module_code_exists(int $courseId, string $moduleCode, ?int $excludeModuleId = null): bool
+function module_code_exists(string $moduleCode, ?int $excludeModuleId = null): bool
 {
-    $sql = 'SELECT module_id FROM modules WHERE course_id = :course_id AND module_code = :module_code';
-    $params = ['course_id' => $courseId, 'module_code' => $moduleCode];
+    $sql = 'SELECT module_id FROM modules WHERE module_code = :module_code';
+    $params = ['module_code' => $moduleCode];
 
     if ($excludeModuleId !== null) {
         $sql .= ' AND module_id <> :module_id';
@@ -690,12 +1218,14 @@ function module_code_exists(int $courseId, string $moduleCode, ?int $excludeModu
 function list_module_lecturer_assignments(?int $moduleId = null, ?int $lecturerId = null): array
 {
     $sql = "SELECT ml.module_lecturer_id, ml.module_id, ml.lecturer_id, ml.assigned_at,
-                   m.module_code, m.module_name, m.status AS module_status, m.course_id,
-                   c.course_code,
+                   m.module_code, m.module_name, m.status AS module_status,
+                   (SELECT GROUP_CONCAT(c.course_code ORDER BY c.course_code SEPARATOR ', ')
+                    FROM course_modules cm
+                    INNER JOIN courses c ON c.course_id = cm.course_id
+                    WHERE cm.module_id = m.module_id AND cm.status = 'ACTIVE') AS course_code,
                    l.staff_no, l.first_name, l.last_name, l.status AS lecturer_status
             FROM module_lecturers ml
             INNER JOIN modules m ON m.module_id = ml.module_id
-            INNER JOIN courses c ON c.course_id = m.course_id
             INNER JOIN lecturers l ON l.lecturer_id = ml.lecturer_id
             WHERE 1=1";
     $params = [];
@@ -710,7 +1240,7 @@ function list_module_lecturer_assignments(?int $moduleId = null, ?int $lecturerI
         $params['lecturer_id'] = $lecturerId;
     }
 
-    $sql .= ' ORDER BY c.course_code, m.module_code, l.last_name, l.first_name';
+    $sql .= ' ORDER BY m.module_code, l.last_name, l.first_name';
     $statement = db()->prepare($sql);
     $statement->execute($params);
 
@@ -824,7 +1354,8 @@ function list_student_module_enrolments(int $studentId): array
                 c.course_code
          FROM student_modules sm
          INNER JOIN modules m ON m.module_id = sm.module_id
-         INNER JOIN courses c ON c.course_id = m.course_id
+         INNER JOIN students st ON st.student_id = sm.student_id
+         INNER JOIN courses c ON c.course_id = st.course_id
          WHERE sm.student_id = :student_id
          ORDER BY sm.status, m.module_code"
     );
@@ -865,7 +1396,7 @@ function enroll_student_in_module(int $studentId, int $moduleId): void
         throw new InvalidArgumentException('Module not found.');
     }
 
-    if ((int) $student['course_id'] !== (int) $module['course_id']) {
+    if (!course_has_module((int) $student['course_id'], $moduleId, true)) {
         throw new InvalidArgumentException('The module does not belong to the student\'s course.');
     }
 
@@ -895,12 +1426,17 @@ function enroll_student_in_module(int $studentId, int $moduleId): void
     ]);
 }
 
-function drop_student_module(int $studentModuleId): void
+function drop_student_module(int $studentModuleId, ?int $expectedStudentId = null): void
 {
-    $statement = db()->prepare(
-        'SELECT student_module_id, status FROM student_modules WHERE student_module_id = :id LIMIT 1'
-    );
-    $statement->execute(['id' => $studentModuleId]);
+    $sql = 'SELECT student_module_id, student_id, status FROM student_modules WHERE student_module_id = :id';
+    $params = ['id' => $studentModuleId];
+    if ($expectedStudentId !== null) {
+        $sql .= ' AND student_id = :student_id';
+        $params['student_id'] = $expectedStudentId;
+    }
+
+    $statement = db()->prepare($sql . ' LIMIT 1');
+    $statement->execute($params);
     $row = $statement->fetch();
     if ($row === false) {
         throw new InvalidArgumentException('Enrolment not found.');
@@ -911,9 +1447,12 @@ function drop_student_module(int $studentModuleId): void
     }
 
     $update = db()->prepare(
-        "UPDATE student_modules SET status = 'DROPPED' WHERE student_module_id = :id"
+        "UPDATE student_modules SET status = 'DROPPED' WHERE student_module_id = :id AND student_id = :student_id"
     );
-    $update->execute(['id' => $studentModuleId]);
+    $update->execute([
+        'id' => $studentModuleId,
+        'student_id' => (int) $row['student_id'],
+    ]);
 }
 
 /**
@@ -931,7 +1470,7 @@ function bulk_enroll_batch_in_module(int $batchId, int $moduleId): array
         throw new InvalidArgumentException('Module not found.');
     }
 
-    if ((int) $batch['course_id'] !== (int) $module['course_id']) {
+    if (!course_has_module((int) $batch['course_id'], $moduleId, true)) {
         throw new InvalidArgumentException('The module and batch must belong to the same course.');
     }
 
@@ -988,6 +1527,406 @@ function bulk_enroll_batch_in_module(int $batchId, int $moduleId): array
     ];
 }
 
+function ensure_batch_modules_table(): bool
+{
+    $pdo = db();
+    $exists = $pdo->query(
+        "SELECT COUNT(*) FROM information_schema.TABLES
+         WHERE TABLE_SCHEMA = DATABASE()
+           AND TABLE_NAME = 'batch_modules'"
+    );
+    if ($exists !== false && (int) $exists->fetchColumn() > 0) {
+        return false;
+    }
+
+    $pdo->exec(
+        "CREATE TABLE batch_modules (
+          batch_module_id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+          batch_id INT UNSIGNED NOT NULL,
+          module_id INT UNSIGNED NOT NULL,
+          status ENUM('ACTIVE', 'INACTIVE') NOT NULL DEFAULT 'ACTIVE',
+          assigned_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          PRIMARY KEY (batch_module_id),
+          UNIQUE KEY uq_batch_modules_batch_module (batch_id, module_id),
+          KEY idx_batch_modules_module (module_id),
+          CONSTRAINT fk_batch_modules_batch
+            FOREIGN KEY (batch_id) REFERENCES batches (batch_id)
+            ON DELETE RESTRICT
+            ON UPDATE CASCADE,
+          CONSTRAINT fk_batch_modules_module
+            FOREIGN KEY (module_id) REFERENCES modules (module_id)
+            ON DELETE RESTRICT
+            ON UPDATE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+    );
+
+    return true;
+}
+
+/**
+ * @return list<array<string, mixed>>
+ */
+function list_batch_module_rows(int $batchId): array
+{
+    ensure_batch_modules_table();
+    $statement = db()->prepare(
+        "SELECT bm.batch_module_id, bm.batch_id, bm.module_id, bm.status, bm.assigned_at,
+                m.module_code, m.module_name, m.status AS module_status, m.semester
+         FROM batch_modules bm
+         INNER JOIN modules m ON m.module_id = bm.module_id
+         WHERE bm.batch_id = :batch_id
+         ORDER BY m.semester, m.module_code"
+    );
+    $statement->execute(['batch_id' => $batchId]);
+
+    return $statement->fetchAll();
+}
+
+/**
+ * @return list<array<string, mixed>>
+ */
+function list_active_assigned_batch_modules(int $batchId): array
+{
+    ensure_batch_modules_table();
+    ensure_course_modules_table();
+    $statement = db()->prepare(
+        "SELECT bm.batch_module_id, bm.batch_id, bm.module_id, bm.status,
+                m.module_code, m.module_name, m.status AS module_status
+         FROM batch_modules bm
+         INNER JOIN modules m ON m.module_id = bm.module_id
+         INNER JOIN batches b ON b.batch_id = bm.batch_id
+         INNER JOIN course_modules cm
+            ON cm.module_id = bm.module_id
+           AND cm.course_id = b.course_id
+           AND cm.status = 'ACTIVE'
+         WHERE bm.batch_id = :batch_id
+           AND bm.status = 'ACTIVE'
+           AND m.status = 'ACTIVE'
+         ORDER BY m.module_code"
+    );
+    $statement->execute(['batch_id' => $batchId]);
+
+    return $statement->fetchAll();
+}
+
+/**
+ * @return list<array<string, mixed>>
+ */
+function list_modules_for_batch_assignment(int $batchId): array
+{
+    $batch = get_batch($batchId);
+    if ($batch === null) {
+        return [];
+    }
+
+    $courseModules = list_active_course_modules((int) $batch['course_id']);
+    $assigned = [];
+    foreach (list_batch_module_rows($batchId) as $row) {
+        $assigned[(int) $row['module_id']] = $row;
+    }
+
+    $visible = [];
+    foreach ($courseModules as $module) {
+        $moduleId = (int) $module['module_id'];
+        $assignment = $assigned[$moduleId] ?? null;
+        $isAssignedActive = $assignment !== null && $assignment['status'] === 'ACTIVE';
+        $module['batch_module_id'] = $assignment['batch_module_id'] ?? null;
+        $module['batch_module_status'] = $assignment['status'] ?? null;
+        $module['is_assigned'] = $isAssignedActive;
+        $module['can_assign'] = $module['module_status'] === 'ACTIVE';
+        $module['status'] = $module['module_status'];
+        $visible[] = $module;
+    }
+
+    foreach ($assigned as $moduleId => $assignment) {
+        if ($assignment['status'] !== 'ACTIVE') {
+            continue;
+        }
+        $already = false;
+        foreach ($visible as $row) {
+            if ((int) $row['module_id'] === $moduleId) {
+                $already = true;
+                break;
+            }
+        }
+        if ($already) {
+            continue;
+        }
+        $module = get_module($moduleId);
+        if ($module === null) {
+            continue;
+        }
+        $module['batch_module_id'] = $assignment['batch_module_id'];
+        $module['batch_module_status'] = $assignment['status'];
+        $module['is_assigned'] = true;
+        $module['can_assign'] = $module['status'] === 'ACTIVE';
+        $module['module_status'] = $module['status'];
+        $visible[] = $module;
+    }
+
+    return $visible;
+}
+
+/**
+ * @return list<array<string, mixed>>
+ */
+function list_active_modules_for_batch(int $batchId): array
+{
+    $batch = get_batch($batchId);
+    if ($batch === null) {
+        return [];
+    }
+
+    return list_active_course_modules((int) $batch['course_id']);
+}
+
+/**
+ * @param list<mixed> $selectedModuleIds
+ */
+function save_batch_module_selection(int $batchId, array $selectedModuleIds): void
+{
+    ensure_batch_modules_table();
+    $batch = get_batch($batchId);
+    if ($batch === null) {
+        throw new InvalidArgumentException('Batch not found.');
+    }
+
+    $courseId = (int) $batch['course_id'];
+    $normalized = [];
+    foreach ($selectedModuleIds as $rawId) {
+        $moduleId = positive_int($rawId);
+        if ($moduleId === null) {
+            throw new InvalidArgumentException('Select valid modules.');
+        }
+        $normalized[$moduleId] = $moduleId;
+    }
+    $selected = array_values($normalized);
+
+    foreach ($selected as $moduleId) {
+        $module = get_module($moduleId);
+        if ($module === null) {
+            throw new InvalidArgumentException('Select a valid module.');
+        }
+        if (!course_has_module($courseId, $moduleId, true)) {
+            throw new InvalidArgumentException('Modules must belong to the same course as the batch.');
+        }
+        if ($module['status'] !== 'ACTIVE') {
+            throw new InvalidArgumentException('Only active modules can be assigned to a batch.');
+        }
+    }
+
+    $existing = [];
+    foreach (list_batch_module_rows($batchId) as $row) {
+        $existing[(int) $row['module_id']] = $row;
+    }
+
+    $pdo = db();
+    $started = false;
+    if (!$pdo->inTransaction()) {
+        $pdo->beginTransaction();
+        $started = true;
+    }
+
+    try {
+        foreach ($selected as $moduleId) {
+            if (!isset($existing[$moduleId])) {
+                $insert = $pdo->prepare(
+                    "INSERT INTO batch_modules (batch_id, module_id, status)
+                     VALUES (:batch_id, :module_id, 'ACTIVE')"
+                );
+                $insert->execute([
+                    'batch_id' => $batchId,
+                    'module_id' => $moduleId,
+                ]);
+                continue;
+            }
+
+            if ($existing[$moduleId]['status'] !== 'ACTIVE') {
+                $update = $pdo->prepare(
+                    "UPDATE batch_modules SET status = 'ACTIVE' WHERE batch_module_id = :id"
+                );
+                $update->execute(['id' => $existing[$moduleId]['batch_module_id']]);
+            }
+        }
+
+        foreach ($existing as $moduleId => $row) {
+            if (!in_array($moduleId, $selected, true) && $row['status'] === 'ACTIVE') {
+                $update = $pdo->prepare(
+                    "UPDATE batch_modules SET status = 'INACTIVE' WHERE batch_module_id = :id"
+                );
+                $update->execute(['id' => $row['batch_module_id']]);
+            }
+        }
+
+        if ($started) {
+            $pdo->commit();
+        }
+    } catch (Throwable $exception) {
+        if ($started && $pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        throw $exception;
+    }
+}
+
+/**
+ * @return 'inserted'|'reactivated'|'skipped'
+ */
+function apply_student_module_enrolment(PDO $pdo, int $studentId, int $moduleId, bool $reactivateExisting): string
+{
+    $existing = get_student_module_enrolment($studentId, $moduleId);
+    if ($existing === null) {
+        $insert = $pdo->prepare(
+            "INSERT INTO student_modules (student_id, module_id, status)
+             VALUES (:student_id, :module_id, 'ENROLLED')"
+        );
+        $insert->execute([
+            'student_id' => $studentId,
+            'module_id' => $moduleId,
+        ]);
+
+        return 'inserted';
+    }
+
+    if ($existing['status'] === 'ENROLLED') {
+        return 'skipped';
+    }
+
+    if (!$reactivateExisting) {
+        return 'skipped';
+    }
+
+    $update = $pdo->prepare(
+        "UPDATE student_modules
+         SET status = 'ENROLLED', enrolled_at = NOW()
+         WHERE student_module_id = :id"
+    );
+    $update->execute(['id' => $existing['student_module_id']]);
+
+    return 'reactivated';
+}
+
+function student_may_auto_enrol_in_batch_modules(array $student): bool
+{
+    if (($student['status'] ?? '') !== 'ACTIVE') {
+        return false;
+    }
+
+    $course = get_course((int) $student['course_id']);
+    $batch = get_batch((int) $student['batch_id']);
+    if ($course === null || $batch === null) {
+        return false;
+    }
+
+    return ($course['status'] ?? '') === 'ACTIVE' && ($batch['status'] ?? '') === 'ACTIVE';
+}
+
+function auto_enrol_student_into_batch_modules(int $studentId, ?PDO $connection = null): int
+{
+    ensure_batch_modules_table();
+    $pdo = $connection ?? db();
+    $studentStatement = $pdo->prepare(
+        'SELECT student_id, course_id, batch_id, status
+         FROM students
+         WHERE student_id = :student_id
+         LIMIT 1'
+    );
+    $studentStatement->execute(['student_id' => $studentId]);
+    $student = $studentStatement->fetch();
+    if ($student === false || !student_may_auto_enrol_in_batch_modules($student)) {
+        return 0;
+    }
+
+    $modules = list_active_assigned_batch_modules((int) $student['batch_id']);
+    $started = false;
+    if (!$pdo->inTransaction()) {
+        $pdo->beginTransaction();
+        $started = true;
+    }
+
+    try {
+        $inserted = 0;
+        foreach ($modules as $module) {
+            if (!course_has_module((int) $student['course_id'], (int) $module['module_id'], true)) {
+                continue;
+            }
+            $result = apply_student_module_enrolment($pdo, $studentId, (int) $module['module_id'], false);
+            if ($result === 'inserted') {
+                $inserted++;
+            }
+        }
+        if ($started) {
+            $pdo->commit();
+        }
+
+        return $inserted;
+    } catch (Throwable $exception) {
+        if ($started && $pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        throw $exception;
+    }
+}
+
+/**
+ * @return array{students_checked: int, modules_assigned: int, enrolments_added: int, enrolments_reactivated: int}
+ */
+function sync_batch_module_enrolments(int $batchId): array
+{
+    ensure_batch_modules_table();
+    $batch = get_batch($batchId);
+    if ($batch === null) {
+        throw new InvalidArgumentException('Batch not found.');
+    }
+
+    $course = get_course((int) $batch['course_id']);
+    if ($course === null || ($course['status'] ?? '') !== 'ACTIVE' || ($batch['status'] ?? '') !== 'ACTIVE') {
+        throw new InvalidArgumentException('Sync requires an active course and an active batch.');
+    }
+
+    $modules = list_active_assigned_batch_modules($batchId);
+    $students = db()->prepare(
+        "SELECT student_id FROM students WHERE batch_id = :batch_id AND status = 'ACTIVE'"
+    );
+    $students->execute(['batch_id' => $batchId]);
+    $studentIds = $students->fetchAll(PDO::FETCH_COLUMN);
+
+    $pdo = db();
+    $pdo->beginTransaction();
+    try {
+        $added = 0;
+        $reactivated = 0;
+        foreach ($studentIds as $studentId) {
+            $student = get_student((int) $studentId);
+            if ($student === null || !student_may_auto_enrol_in_batch_modules($student)) {
+                continue;
+            }
+            foreach ($modules as $module) {
+                if (!course_has_module((int) $student['course_id'], (int) $module['module_id'], true)) {
+                    continue;
+                }
+                $result = apply_student_module_enrolment($pdo, (int) $studentId, (int) $module['module_id'], true);
+                if ($result === 'inserted') {
+                    $added++;
+                } elseif ($result === 'reactivated') {
+                    $reactivated++;
+                }
+            }
+        }
+        $pdo->commit();
+    } catch (Throwable $exception) {
+        $pdo->rollBack();
+        throw $exception;
+    }
+
+    return [
+        'students_checked' => count($studentIds),
+        'modules_assigned' => count($modules),
+        'enrolments_added' => $added,
+        'enrolments_reactivated' => $reactivated,
+    ];
+}
+
 /**
  * @param array{module_id?: int, lecturer_id?: int, batch_id?: int, day_of_week?: string, status?: string} $filters
  * @return list<array<string, mixed>>
@@ -996,7 +1935,7 @@ function list_schedules(array $filters = []): array
 {
     $sql = "SELECT s.schedule_id, s.module_id, s.lecturer_id, s.batch_id, s.day_of_week,
                    s.start_time, s.end_time, s.break_start, s.break_end, s.room, s.status,
-                   m.module_code, m.module_name, m.course_id,
+                   m.module_code, m.module_name,
                    l.staff_no, l.first_name AS lecturer_first_name, l.last_name AS lecturer_last_name,
                    b.batch_name, c.course_code, c.course_name
             FROM schedules s
@@ -1047,7 +1986,7 @@ function get_schedule(int $scheduleId): ?array
     $statement = db()->prepare(
         "SELECT s.schedule_id, s.module_id, s.lecturer_id, s.batch_id, s.day_of_week,
                 s.start_time, s.end_time, s.break_start, s.break_end, s.room, s.status,
-                m.module_code, m.module_name, m.course_id,
+                m.module_code, m.module_name,
                 l.staff_no, l.first_name AS lecturer_first_name, l.last_name AS lecturer_last_name,
                 b.batch_name, c.course_code, c.course_name
          FROM schedules s
@@ -1114,7 +2053,7 @@ function validate_schedule_payload(array $data, ?int $excludeScheduleId = null):
         $errors[] = 'Select a valid timetable status.';
     }
 
-    if ($module !== null && $batch !== null && (int) $module['course_id'] !== (int) $batch['course_id']) {
+    if ($module !== null && $batch !== null && !course_has_module((int) $batch['course_id'], $moduleId, true)) {
         $errors[] = 'The module and batch must belong to the same course.';
     }
 
@@ -1303,7 +2242,7 @@ function list_lecture_sessions(array $filters = []): array
                    ls.session_date, ls.scheduled_start, ls.scheduled_end, ls.break_start, ls.break_end,
                    ls.actual_start, ls.actual_end,
                    ls.room, ls.late_after_minutes, ls.status,
-                   m.module_code, m.module_name, m.course_id, m.status AS module_status,
+                   m.module_code, m.module_name, m.status AS module_status,
                    l.staff_no, l.first_name AS lecturer_first_name, l.last_name AS lecturer_last_name,
                    b.batch_name, c.course_code, c.course_name
             FROM lecture_sessions ls
@@ -1370,7 +2309,7 @@ function get_lecture_session(int $sessionId): ?array
                 ls.session_date, ls.scheduled_start, ls.scheduled_end, ls.break_start, ls.break_end,
                 ls.actual_start, ls.actual_end,
                 ls.room, ls.late_after_minutes, ls.status,
-                m.module_code, m.module_name, m.course_id, m.status AS module_status,
+                m.module_code, m.module_name, m.status AS module_status,
                 l.staff_no, l.first_name AS lecturer_first_name, l.last_name AS lecturer_last_name,
                 b.batch_name, c.course_code, c.course_name
          FROM lecture_sessions ls
@@ -1459,7 +2398,7 @@ function create_lecture_session(array $data): int
         throw new InvalidArgumentException($breakErrors[0]);
     }
 
-    if ((int) $module['course_id'] !== (int) $batch['course_id']) {
+    if (!course_has_module((int) $batch['course_id'], $moduleId, true)) {
         throw new InvalidArgumentException('The module and batch must belong to the same course.');
     }
 

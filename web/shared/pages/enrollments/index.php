@@ -43,8 +43,22 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
     }
 }
 
-$modules = list_modules(['status' => 'ACTIVE']);
 $batches = list_batches(null, true);
+$selectedBatchId = positive_int($_POST['batch_id'] ?? $_GET['batch_id'] ?? null);
+$modules = $selectedBatchId !== null ? list_active_modules_for_batch($selectedBatchId) : [];
+$modulesByBatch = [];
+foreach ($batches as $batch) {
+    $courseModules = list_active_modules_for_batch((int) $batch['batch_id']);
+    $modulesByBatch[(string) $batch['batch_id']] = array_map(
+        static function (array $module): array {
+            return [
+                'module_id' => (int) $module['module_id'],
+                'label' => $module['module_code'] . ' – ' . $module['module_name'],
+            ];
+        },
+        $courseModules
+    );
+}
 $students = list_students(['status' => 'ACTIVE']);
 
 require INCLUDES_PATH . '/dashboard-layout-start.php';
@@ -68,10 +82,10 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
             <?= csrf_field() ?>
             <div class="col-md-5">
                 <label for="batch_id" class="form-label">Batch</label>
-                <select class="form-select" id="batch_id" name="batch_id" required>
+                <select class="form-select" id="batch_id" name="batch_id" data-module-target="module_id" required>
                     <option value="">Select batch</option>
                     <?php foreach ($batches as $batch): ?>
-                        <option value="<?= e((string) $batch['batch_id']) ?>">
+                        <option value="<?= e((string) $batch['batch_id']) ?>" <?= $selectedBatchId === (int) $batch['batch_id'] ? 'selected' : '' ?>>
                             <?= e($batch['course_code'] . ' – ' . $batch['batch_name']) ?>
                         </option>
                     <?php endforeach; ?>
@@ -92,6 +106,7 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
                 <button type="submit" class="btn btn-primary w-100">Enrol Batch</button>
             </div>
         </form>
+        <script type="application/json" id="enrol-modules-by-batch"><?= json_encode($modulesByBatch, JSON_THROW_ON_ERROR | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?></script>
     </div>
 </div>
 

@@ -99,12 +99,20 @@ Application code should keep `users.role` consistent with the matching profile t
 
 ### 7. `modules`
 
-A teachable subject belonging to a course.
+Independent Module Catalogue. A teachable subject is created once and may be linked to many courses.
 
 - **Primary key:** `module_id`
-- **Foreign keys:** `course_id` → `courses.course_id`
-- **Unique:** `(course_id, module_code)`
-- **Notes:** `credits` is `DECIMAL(4,1)` to allow values such as `1.5`.
+- **Unique:** `module_code` globally
+- **Notes:** `credits` is `DECIMAL(4,1)` to allow values such as `1.5`. Credits and semester stay on the catalogue row.
+
+### 7b. `course_modules`
+
+Which catalogue modules a course currently uses.
+
+- **Primary key:** `course_module_id`
+- **Foreign keys:** `course_id` → `courses.course_id`, `module_id` → `modules.module_id`
+- **Unique:** `(course_id, module_id)`
+- **Notes:** `status` `INACTIVE` means unassigned going forward. Rows are never hard-deleted.
 
 ### 8. `student_modules`
 
@@ -230,7 +238,9 @@ Activity history for security and traceability.
 | `students` | `user_id`, `registration_no` | One profile and one registration number per student |
 | `lecturers` | `user_id`, `staff_no` | One profile and one staff number per lecturer |
 | `academic_staff` | `user_id`, `staff_no` | One profile and one staff number per academic staff member |
-| `modules` | `(course_id, module_code)` | Unique module code inside a course |
+| `modules` | `module_code` | Unique catalogue module code |
+| `course_modules` | `(course_id, module_id)` | A course can use a catalogue module only once |
+| `batch_modules` | `(batch_id, module_id)` | A batch can take a module only once |
 | `student_modules` | `(student_id, module_id)` | No duplicate enrolment |
 | `module_lecturers` | `(module_id, lecturer_id)` | No duplicate teaching assignment |
 | `lecture_sessions` | `(module_id, batch_id, session_date, scheduled_start)` | No duplicate session occurrence |
@@ -250,7 +260,8 @@ erDiagram
 
   courses ||--o{ batches : contains
   courses ||--o{ students : enrols
-  courses ||--o{ modules : contains
+  courses ||--o{ course_modules : selects
+  modules ||--o{ course_modules : offered_as
 
   batches ||--o{ students : groups
   batches ||--o{ schedules : timetabled_for
@@ -287,9 +298,9 @@ erDiagram
 Relationship summary:
 
 - One `users` row is the login for at most one student, lecturer, or academic staff profile.
-- A `course` has many `batches` and many `modules`.
+- A `course` has many `batches`. Catalogue `modules` are linked through `course_modules`.
 - A `student` belongs to one `course` and one `batch`, and that pair must match.
-- A `module` can have many lecturers and many enrolled students.
+- A catalogue `module` can belong to many courses and can have many lecturers and enrolled students.
 - A `schedule` is recurring; a `lecture_session` is one dated occurrence.
 - A `student` has at most one `face_profiles` row.
 - A `lecture_session` has many raw `attendance_events` and at most one `attendance_records` row per student.

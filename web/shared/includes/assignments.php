@@ -241,11 +241,13 @@ function assignment_select_sql(): string
     return "SELECT a.assignment_id, a.module_id, a.lecturer_id, a.title, a.description, a.file_path,
                    a.due_date, a.max_marks, a.status, a.created_at, a.updated_at,
                    m.module_code, m.module_name, m.status AS module_status,
-                   c.course_code,
+                   (SELECT GROUP_CONCAT(c.course_code ORDER BY c.course_code SEPARATOR ', ')
+                    FROM course_modules cm
+                    INNER JOIN courses c ON c.course_id = cm.course_id
+                    WHERE cm.module_id = m.module_id AND cm.status = 'ACTIVE') AS course_code,
                    l.staff_no, l.first_name AS lecturer_first_name, l.last_name AS lecturer_last_name
             FROM assignments a
             INNER JOIN modules m ON m.module_id = a.module_id
-            INNER JOIN courses c ON c.course_id = m.course_id
             INNER JOIN lecturers l ON l.lecturer_id = a.lecturer_id";
 }
 

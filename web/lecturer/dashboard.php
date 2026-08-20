@@ -41,9 +41,9 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
         <div class="col-md-6 col-lg-4">
             <div class="card shadow-sm h-100">
                 <div class="card-body">
-                    <h2 class="h5">My Timetable</h2>
-                    <p class="text-muted">Weekly slots assigned to you.</p>
-                    <a href="<?= e(app_url('lecturer/schedules/index.php')) ?>" class="btn btn-primary btn-sm">Open</a>
+                    <h2 class="h5">My Calendar</h2>
+                    <p class="text-muted">Dated lecture sessions assigned to you.</p>
+                    <a href="<?= e(app_url('lecturer/schedules/index.php')) ?>" class="btn btn-primary btn-sm">Open calendar</a>
                 </div>
             </div>
         </div>

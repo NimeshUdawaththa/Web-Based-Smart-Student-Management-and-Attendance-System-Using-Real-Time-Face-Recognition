@@ -47,7 +47,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
             if ($enrolmentId === null) {
                 throw new InvalidArgumentException('Enrolment not found.');
             }
-            drop_student_module($enrolmentId);
+            drop_student_module($enrolmentId, $studentId);
             set_flash('success', 'Module enrolment dropped.');
         } else {
             throw new InvalidArgumentException('Unknown action.');
@@ -62,6 +62,7 @@ $enrolments = list_student_module_enrolments($studentId);
 $availableModules = list_modules([
     'course_id' => (int) $student['course_id'],
     'status' => 'ACTIVE',
+    'course_module_status' => 'ACTIVE',
 ]);
 
 require INCLUDES_PATH . '/dashboard-layout-start.php';
