@@ -74,16 +74,20 @@ try {
     $form = (string) file_get_contents($root . '/web/shared/pages/courses/form.php');
     $adminCreate = (string) file_get_contents($root . '/web/admin/courses/create.php');
     $adminSetup = (string) file_get_contents($root . '/web/admin/courses/modules.php');
+    $viewPageEarly = (string) file_get_contents($root . '/web/shared/pages/courses/view.php');
     if (
-        str_contains($form, "courses/modules.php?id=")
-        && str_contains($form, 'create_course($payload)')
+        str_contains($form, "courses/view.php?id=")
+        && str_contains($form, 'create_course_with_modules')
+        && (str_contains($form, 'Course created successfully with ')
+            || str_contains($form, 'You can assign modules from Manage Modules'))
+        && str_contains($viewPageEarly, 'Manage Modules')
         && str_contains($adminCreate, 'require_admin()')
         && str_contains($adminSetup, 'require_admin()')
         && str_contains($adminSetup, 'courses/modules.php')
     ) {
-        pass('A Admin creates Course → redirected to Module Setup');
+        pass('A Admin creates Course → redirected to Course View');
     } else {
-        fail('A Admin creates Course → redirected to Module Setup');
+        fail('A Admin creates Course → redirected to Course View');
     }
 
     $staffCreate = (string) file_get_contents($root . '/web/academic-staff/courses/create.php');
@@ -93,10 +97,11 @@ try {
         && str_contains($staffSetup, 'require_student_manager()')
         && str_contains($form, 'edit.php?id=')
         && str_contains($form, 'Course updated.')
+        && str_contains($form, 'Manage Modules')
     ) {
-        pass('B Academic Staff creates Course → redirected to Module Setup');
+        pass('B Academic Staff creates Course → redirected to Course View');
     } else {
-        fail('B Academic Staff creates Course → redirected to Module Setup');
+        fail('B Academic Staff creates Course → redirected to Course View');
     }
 
     $setupPage = (string) file_get_contents($root . '/web/shared/pages/courses/modules.php');

@@ -197,14 +197,19 @@ try {
 
     $setupPage = (string) file_get_contents($root . '/web/shared/pages/courses/modules.php');
     $formPage = (string) file_get_contents($root . '/web/shared/pages/courses/form.php');
+    $viewPage = (string) file_get_contents($root . '/web/shared/pages/courses/view.php');
     if (
-        str_contains($formPage, 'courses/modules.php?id=')
+        str_contains($formPage, 'create_course_with_modules')
+        && str_contains($formPage, 'module_ids[]')
+        && str_contains($formPage, 'courses/view.php?id=')
+        && str_contains($formPage, 'Manage Modules')
+        && str_contains($viewPage, 'courses/modules.php?id=')
         && str_contains($setupPage, 'module_ids[]')
         && str_contains($setupPage, 'list_modules_for_course_assignment')
     ) {
-        pass('F Course Create can select existing catalogue modules');
+        pass('F Course Create/View can reach existing catalogue module assignment');
     } else {
-        fail('F Course Create can select existing catalogue modules');
+        fail('F Course Create/View can reach existing catalogue module assignment');
     }
 
     save_course_module_selection($courseCs, []);

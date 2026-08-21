@@ -28,8 +28,8 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
 <div class="d-flex justify-content-between align-items-center mb-4">
     <a href="<?= e(app_url($academicRoutePrefix . '/courses/index.php')) ?>" class="btn btn-outline-secondary btn-sm">&larr; Back to Courses</a>
     <div class="d-flex gap-2">
-        <a href="<?= e(app_url($academicRoutePrefix . '/courses/modules.php?id=' . $course['course_id'])) ?>" class="btn btn-outline-primary btn-sm">Manage Modules</a>
-        <a href="<?= e(app_url($academicRoutePrefix . '/courses/edit.php?id=' . $course['course_id'])) ?>" class="btn btn-primary btn-sm">Edit</a>
+        <a href="<?= e(app_url($academicRoutePrefix . '/courses/edit.php?id=' . $course['course_id'])) ?>" class="btn btn-outline-secondary btn-sm">Edit</a>
+        <a href="<?= e(app_url($academicRoutePrefix . '/courses/modules.php?id=' . $course['course_id'])) ?>" class="btn btn-primary btn-sm">Manage Modules</a>
     </div>
 </div>
 
@@ -96,9 +96,9 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
 </div>
 
 <div class="card shadow-sm mt-4">
-    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+    <div class="card-header bg-white d-flex justify-content-between align-items-center gap-2 flex-wrap">
         <h2 class="h6 mb-0">Modules (<?= count($courseModules) ?>)</h2>
-        <a href="<?= e(app_url($academicRoutePrefix . '/courses/modules.php?id=' . $course['course_id'])) ?>" class="btn btn-sm btn-outline-primary">Manage Modules</a>
+        <a href="<?= e(app_url($academicRoutePrefix . '/courses/modules.php?id=' . $course['course_id'])) ?>" class="btn btn-sm btn-primary">Manage Modules</a>
     </div>
     <div class="table-responsive">
         <table class="table table-hover mb-0 align-middle">
@@ -115,7 +115,13 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
             </thead>
             <tbody>
                 <?php if ($courseModules === []): ?>
-                    <tr><td colspan="7" class="text-center text-muted py-4">No modules assigned to this course.</td></tr>
+                    <tr>
+                        <td colspan="7" class="text-center text-muted py-4">
+                            No modules assigned to this course yet.
+                            <a href="<?= e(app_url($academicRoutePrefix . '/courses/modules.php?id=' . $course['course_id'])) ?>">Manage Modules</a>
+                            to assign from the Module Catalogue.
+                        </td>
+                    </tr>
                 <?php else: ?>
                     <?php foreach ($courseModules as $module): ?>
                         <tr>

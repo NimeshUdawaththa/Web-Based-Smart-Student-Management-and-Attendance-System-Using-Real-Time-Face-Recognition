@@ -807,8 +807,10 @@ function list_users(array $filters = []): array
     $params = [];
 
     if (!empty($filters['search'])) {
-        $sql .= ' AND (username LIKE :search OR email LIKE :search)';
-        $params['search'] = '%' . $filters['search'] . '%';
+        $sql .= ' AND (username LIKE :search1 OR email LIKE :search2)';
+        $searchTerm = '%' . $filters['search'] . '%';
+        $params['search1'] = $searchTerm;
+        $params['search2'] = $searchTerm;
     }
 
     if (!empty($filters['role'])) {
@@ -853,18 +855,25 @@ function get_user(int $userId): ?array
  * Create a User Management account (ADMIN / ACADEMIC_STAFF / LECTURER only).
  * STUDENT accounts must be created via Student Management → Register Student.
  *
- * @param array{username: string, email: string, password: string, role: string, status: string} $data
+ * LECTURER / ACADEMIC_STAFF also create the matching management profile atomically
+ * via create_lecturer() / create_academic_staff_member().
+ *
+ * @param array{
+ *   username: string,
+ *   email: string,
+ *   password: string,
+ *   role: string,
+ *   status: string,
+ *   staff_no?: string,
+ *   first_name?: string,
+ *   last_name?: string,
+ *   phone?: string,
+ *   department?: string,
+ *   position?: string
+ * } $data
  */
 function create_user(array $data): int
 {
-    if (username_exists($data['username'])) {
-        throw new InvalidArgumentException('Username is already in use.');
-    }
-
-    if (email_exists($data['email'])) {
-        throw new InvalidArgumentException('Email is already in use.');
-    }
-
     $role = (string) ($data['role'] ?? '');
     if ($role === 'STUDENT') {
         throw new InvalidArgumentException(student_accounts_managed_elsewhere_message() . ' Use Student Management → Register Student.');
@@ -875,6 +884,56 @@ function create_user(array $data): int
 
     if (!in_array($data['status'], user_statuses(), true)) {
         throw new InvalidArgumentException('Invalid account status selected.');
+    }
+
+    if ($role === 'LECTURER') {
+        $lecturerId = create_lecturer([
+            'username' => $data['username'],
+            'email' => $data['email'],
+            'password' => $data['password'],
+            'account_status' => $data['status'],
+            'staff_no' => $data['staff_no'] ?? '',
+            'first_name' => $data['first_name'] ?? '',
+            'last_name' => $data['last_name'] ?? '',
+            'phone' => $data['phone'] ?? '',
+            'department' => $data['department'] ?? '',
+            'status' => staff_profile_status_from_account_status((string) $data['status']),
+        ]);
+        $lecturer = get_lecturer($lecturerId);
+        if ($lecturer === null) {
+            throw new RuntimeException('Lecturer profile was not created.');
+        }
+
+        return (int) $lecturer['user_id'];
+    }
+
+    if ($role === 'ACADEMIC_STAFF') {
+        $staffId = create_academic_staff_member([
+            'username' => $data['username'],
+            'email' => $data['email'],
+            'password' => $data['password'],
+            'account_status' => $data['status'],
+            'staff_no' => $data['staff_no'] ?? '',
+            'first_name' => $data['first_name'] ?? '',
+            'last_name' => $data['last_name'] ?? '',
+            'phone' => $data['phone'] ?? '',
+            'position' => $data['position'] ?? '',
+            'status' => staff_profile_status_from_account_status((string) $data['status']),
+        ]);
+        $staff = get_academic_staff_member($staffId);
+        if ($staff === null) {
+            throw new RuntimeException('Academic staff profile was not created.');
+        }
+
+        return (int) $staff['user_id'];
+    }
+
+    if (username_exists($data['username'])) {
+        throw new InvalidArgumentException('Username is already in use.');
+    }
+
+    if (email_exists($data['email'])) {
+        throw new InvalidArgumentException('Email is already in use.');
     }
 
     $statement = db()->prepare(
@@ -890,6 +949,347 @@ function create_user(array $data): int
     ]);
 
     return (int) db()->lastInsertId();
+}
+
+/**
+ * Map login account status to lecturer/academic_staff profile status.
+ */
+function staff_profile_status_from_account_status(string $accountStatus): string
+{
+    return $accountStatus === 'ACTIVE' ? 'ACTIVE' : 'INACTIVE';
+}
+
+/**
+ * Linked lecturer_id for a login account, if a lecturer profile exists.
+ */
+function get_lecturer_id_by_user_id(int $userId): ?int
+{
+    $statement = db()->prepare(
+        'SELECT lecturer_id FROM lecturers WHERE user_id = :user_id LIMIT 1'
+    );
+    $statement->execute(['user_id' => $userId]);
+    $value = $statement->fetchColumn();
+
+    return $value === false ? null : (int) $value;
+}
+
+/**
+ * Linked academic_staff_id for a login account, if a staff profile exists.
+ */
+function get_academic_staff_id_by_user_id(int $userId): ?int
+{
+    $statement = db()->prepare(
+        'SELECT academic_staff_id FROM academic_staff WHERE user_id = :user_id LIMIT 1'
+    );
+    $statement->execute(['user_id' => $userId]);
+    $value = $statement->fetchColumn();
+
+    return $value === false ? null : (int) $value;
+}
+
+/**
+ * True when a LECTURER login has no lecturers profile row.
+ */
+function user_needs_lecturer_profile(array $user): bool
+{
+    return (string) ($user['role'] ?? '') === 'LECTURER'
+        && get_lecturer_id_by_user_id((int) $user['user_id']) === null;
+}
+
+/**
+ * True when an ACADEMIC_STAFF login has no academic_staff profile row.
+ */
+function user_needs_academic_staff_profile(array $user): bool
+{
+    return (string) ($user['role'] ?? '') === 'ACADEMIC_STAFF'
+        && get_academic_staff_id_by_user_id((int) $user['user_id']) === null;
+}
+
+/**
+ * Attach a lecturer profile to an existing LECTURER user (historical orphan repair).
+ * Does not create/update users row, password, username, or email.
+ *
+ * @param array{staff_no: mixed, first_name: mixed, last_name: mixed, phone?: mixed, department?: mixed} $data
+ */
+function complete_lecturer_profile_for_user(int $userId, array $data): int
+{
+    $user = get_user($userId);
+    if ($user === null) {
+        throw new InvalidArgumentException('User not found.');
+    }
+
+    if ((string) $user['role'] !== 'LECTURER') {
+        throw new InvalidArgumentException('Only Lecturer accounts can receive a lecturer profile.');
+    }
+
+    if (get_lecturer_id_by_user_id($userId) !== null) {
+        throw new InvalidArgumentException('This account already has a lecturer profile.');
+    }
+
+    $staffNo = trim((string) ($data['staff_no'] ?? ''));
+    $firstName = trim((string) ($data['first_name'] ?? ''));
+    $lastName = trim((string) ($data['last_name'] ?? ''));
+    $phone = trim((string) ($data['phone'] ?? ''));
+    $department = trim((string) ($data['department'] ?? ''));
+
+    if ($staffNo === '' || $firstName === '' || $lastName === '') {
+        throw new InvalidArgumentException('Staff number, first name, and last name are required for a lecturer profile.');
+    }
+
+    if (staff_no_exists('lecturers', $staffNo)) {
+        throw new InvalidArgumentException('Staff number is already in use.');
+    }
+
+    $profileStatus = staff_profile_status_from_account_status((string) $user['status']);
+
+    try {
+        $statement = db()->prepare(
+            'INSERT INTO lecturers (user_id, staff_no, first_name, last_name, phone, department, status)
+             VALUES (:user_id, :staff_no, :first_name, :last_name, :phone, :department, :status)'
+        );
+        $statement->execute([
+            'user_id' => $userId,
+            'staff_no' => $staffNo,
+            'first_name' => $firstName,
+            'last_name' => $lastName,
+            'phone' => $phone !== '' ? $phone : null,
+            'department' => $department !== '' ? $department : null,
+            'status' => $profileStatus,
+        ]);
+
+        return (int) db()->lastInsertId();
+    } catch (Throwable $exception) {
+        if (is_integrity_constraint_violation($exception)) {
+            throw new InvalidArgumentException('Unable to complete lecturer profile: staff number may already be in use, or a profile already exists.');
+        }
+        throw $exception;
+    }
+}
+
+/**
+ * Attach an academic_staff profile to an existing ACADEMIC_STAFF user (historical orphan repair).
+ * Does not create/update users row, password, username, or email.
+ *
+ * @param array{staff_no: mixed, first_name: mixed, last_name: mixed, phone?: mixed, position?: mixed} $data
+ */
+function complete_academic_staff_profile_for_user(int $userId, array $data): int
+{
+    $user = get_user($userId);
+    if ($user === null) {
+        throw new InvalidArgumentException('User not found.');
+    }
+
+    if ((string) $user['role'] !== 'ACADEMIC_STAFF') {
+        throw new InvalidArgumentException('Only Academic Staff accounts can receive an academic staff profile.');
+    }
+
+    if (get_academic_staff_id_by_user_id($userId) !== null) {
+        throw new InvalidArgumentException('This account already has an academic staff profile.');
+    }
+
+    $staffNo = trim((string) ($data['staff_no'] ?? ''));
+    $firstName = trim((string) ($data['first_name'] ?? ''));
+    $lastName = trim((string) ($data['last_name'] ?? ''));
+    $phone = trim((string) ($data['phone'] ?? ''));
+    $position = trim((string) ($data['position'] ?? ''));
+
+    if ($staffNo === '' || $firstName === '' || $lastName === '') {
+        throw new InvalidArgumentException('Staff number, first name, and last name are required for an academic staff profile.');
+    }
+
+    if (staff_no_exists('academic_staff', $staffNo)) {
+        throw new InvalidArgumentException('Staff number is already in use.');
+    }
+
+    $profileStatus = staff_profile_status_from_account_status((string) $user['status']);
+
+    try {
+        $statement = db()->prepare(
+            'INSERT INTO academic_staff (user_id, staff_no, first_name, last_name, phone, position, status)
+             VALUES (:user_id, :staff_no, :first_name, :last_name, :phone, :position, :status)'
+        );
+        $statement->execute([
+            'user_id' => $userId,
+            'staff_no' => $staffNo,
+            'first_name' => $firstName,
+            'last_name' => $lastName,
+            'phone' => $phone !== '' ? $phone : null,
+            'position' => $position !== '' ? $position : null,
+            'status' => $profileStatus,
+        ]);
+
+        return (int) db()->lastInsertId();
+    } catch (Throwable $exception) {
+        if (is_integrity_constraint_violation($exception)) {
+            throw new InvalidArgumentException('Unable to complete academic staff profile: staff number may already be in use, or a profile already exists.');
+        }
+        throw $exception;
+    }
+}
+
+/**
+ * Keep lecturer / academic_staff profile status aligned with login status.
+ * Does not delete profiles or academic history.
+ */
+function sync_staff_profile_status_for_user(int $userId, string $role, string $accountStatus): void
+{
+    $profileStatus = staff_profile_status_from_account_status($accountStatus);
+
+    if ($role === 'LECTURER') {
+        $statement = db()->prepare(
+            'UPDATE lecturers SET status = :status WHERE user_id = :user_id'
+        );
+        $statement->execute([
+            'status' => $profileStatus,
+            'user_id' => $userId,
+        ]);
+        return;
+    }
+
+    if ($role === 'ACADEMIC_STAFF') {
+        $statement = db()->prepare(
+            'UPDATE academic_staff SET status = :status WHERE user_id = :user_id'
+        );
+        $statement->execute([
+            'status' => $profileStatus,
+            'user_id' => $userId,
+        ]);
+    }
+}
+
+/**
+ * Reject unsafe User Management role conversions that would orphan or invent profiles.
+ */
+function assert_user_management_role_change_allowed(array $user, string $newRole): void
+{
+    $currentRole = (string) ($user['role'] ?? '');
+    if ($newRole === $currentRole) {
+        return;
+    }
+
+    $profileRoles = ['LECTURER', 'ACADEMIC_STAFF'];
+    if (in_array($currentRole, $profileRoles, true) || in_array($newRole, $profileRoles, true)) {
+        throw new InvalidArgumentException(
+            'Role cannot be changed here. Lecturer and Academic Staff accounts are tied to management profiles. '
+            . 'Create the correct account type instead of converting an existing role.'
+        );
+    }
+}
+
+/**
+ * Audit account/profile anomalies (read-only). Does not modify data.
+ *
+ * @return array{
+ *   lecturer_users_without_profile: list<array<string, mixed>>,
+ *   academic_staff_users_without_profile: list<array<string, mixed>>,
+ *   lecturer_profiles_without_valid_user: list<array<string, mixed>>,
+ *   academic_staff_profiles_without_valid_user: list<array<string, mixed>>,
+ *   lecturer_profiles_wrong_role: list<array<string, mixed>>,
+ *   academic_staff_profiles_wrong_role: list<array<string, mixed>>,
+ *   duplicate_lecturer_user_links: list<array<string, mixed>>,
+ *   duplicate_academic_staff_user_links: list<array<string, mixed>>,
+ *   status_mismatches_lecturer: list<array<string, mixed>>,
+ *   status_mismatches_academic_staff: list<array<string, mixed>>
+ * }
+ */
+function audit_user_staff_profile_anomalies(): array
+{
+    $pdo = db();
+
+    $lecturerUsersWithoutProfile = $pdo->query(
+        "SELECT u.user_id, u.username, u.email, u.role, u.status
+         FROM users u
+         LEFT JOIN lecturers l ON l.user_id = u.user_id
+         WHERE u.role = 'LECTURER' AND l.lecturer_id IS NULL
+         ORDER BY u.user_id"
+    )->fetchAll();
+
+    $staffUsersWithoutProfile = $pdo->query(
+        "SELECT u.user_id, u.username, u.email, u.role, u.status
+         FROM users u
+         LEFT JOIN academic_staff a ON a.user_id = u.user_id
+         WHERE u.role = 'ACADEMIC_STAFF' AND a.academic_staff_id IS NULL
+         ORDER BY u.user_id"
+    )->fetchAll();
+
+    $lecturerOrphans = $pdo->query(
+        "SELECT l.lecturer_id, l.user_id, l.staff_no, l.first_name, l.last_name, l.status
+         FROM lecturers l
+         LEFT JOIN users u ON u.user_id = l.user_id
+         WHERE u.user_id IS NULL
+         ORDER BY l.lecturer_id"
+    )->fetchAll();
+
+    $staffOrphans = $pdo->query(
+        "SELECT a.academic_staff_id, a.user_id, a.staff_no, a.first_name, a.last_name, a.status
+         FROM academic_staff a
+         LEFT JOIN users u ON u.user_id = a.user_id
+         WHERE u.user_id IS NULL
+         ORDER BY a.academic_staff_id"
+    )->fetchAll();
+
+    $lecturerWrongRole = $pdo->query(
+        "SELECT l.lecturer_id, l.user_id, l.staff_no, u.username, u.role, u.status AS account_status
+         FROM lecturers l
+         INNER JOIN users u ON u.user_id = l.user_id
+         WHERE u.role <> 'LECTURER'
+         ORDER BY l.lecturer_id"
+    )->fetchAll();
+
+    $staffWrongRole = $pdo->query(
+        "SELECT a.academic_staff_id, a.user_id, a.staff_no, u.username, u.role, u.status AS account_status
+         FROM academic_staff a
+         INNER JOIN users u ON u.user_id = a.user_id
+         WHERE u.role <> 'ACADEMIC_STAFF'
+         ORDER BY a.academic_staff_id"
+    )->fetchAll();
+
+    $dupLecturer = $pdo->query(
+        "SELECT user_id, COUNT(*) AS profile_count
+         FROM lecturers
+         GROUP BY user_id
+         HAVING COUNT(*) > 1
+         ORDER BY user_id"
+    )->fetchAll();
+
+    $dupStaff = $pdo->query(
+        "SELECT user_id, COUNT(*) AS profile_count
+         FROM academic_staff
+         GROUP BY user_id
+         HAVING COUNT(*) > 1
+         ORDER BY user_id"
+    )->fetchAll();
+
+    $lecturerStatusMismatch = $pdo->query(
+        "SELECT l.lecturer_id, l.user_id, l.status AS profile_status, u.status AS account_status, u.username
+         FROM lecturers l
+         INNER JOIN users u ON u.user_id = l.user_id
+         WHERE (u.status = 'ACTIVE' AND l.status = 'INACTIVE')
+            OR (u.status <> 'ACTIVE' AND l.status = 'ACTIVE')
+         ORDER BY l.lecturer_id"
+    )->fetchAll();
+
+    $staffStatusMismatch = $pdo->query(
+        "SELECT a.academic_staff_id, a.user_id, a.status AS profile_status, u.status AS account_status, u.username
+         FROM academic_staff a
+         INNER JOIN users u ON u.user_id = a.user_id
+         WHERE (u.status = 'ACTIVE' AND a.status = 'INACTIVE')
+            OR (u.status <> 'ACTIVE' AND a.status = 'ACTIVE')
+         ORDER BY a.academic_staff_id"
+    )->fetchAll();
+
+    return [
+        'lecturer_users_without_profile' => $lecturerUsersWithoutProfile,
+        'academic_staff_users_without_profile' => $staffUsersWithoutProfile,
+        'lecturer_profiles_without_valid_user' => $lecturerOrphans,
+        'academic_staff_profiles_without_valid_user' => $staffOrphans,
+        'lecturer_profiles_wrong_role' => $lecturerWrongRole,
+        'academic_staff_profiles_wrong_role' => $staffWrongRole,
+        'duplicate_lecturer_user_links' => $dupLecturer,
+        'duplicate_academic_staff_user_links' => $dupStaff,
+        'status_mismatches_lecturer' => $lecturerStatusMismatch,
+        'status_mismatches_academic_staff' => $staffStatusMismatch,
+    ];
 }
 
 /**
@@ -996,6 +1396,7 @@ function update_user(int $userId, array $data): void
     }
 
     assert_user_management_may_change_status($user, (string) $status);
+    assert_user_management_role_change_allowed($user, (string) $role);
 
     $sql = 'UPDATE users SET username = :username, email = :email, role = :role, status = :status';
     $params = [
@@ -1015,6 +1416,8 @@ function update_user(int $userId, array $data): void
 
     $statement = db()->prepare($sql);
     $statement->execute($params);
+
+    sync_staff_profile_status_for_user($userId, (string) $role, (string) $status);
 }
 
 function set_user_status(int $userId, string $status): void
@@ -1041,6 +1444,8 @@ function set_user_status(int $userId, string $status): void
         'status' => $status,
         'user_id' => $userId,
     ]);
+
+    sync_staff_profile_status_for_user($userId, (string) $user['role'], $status);
 }
 
 /**
@@ -1375,8 +1780,12 @@ function list_lecturers(array $filters = []): array
     $params = [];
 
     if (!empty($filters['search'])) {
-        $sql .= ' AND (l.staff_no LIKE :search OR l.first_name LIKE :search OR l.last_name LIKE :search OR u.email LIKE :search)';
-        $params['search'] = '%' . $filters['search'] . '%';
+        $sql .= ' AND (l.staff_no LIKE :search1 OR l.first_name LIKE :search2 OR l.last_name LIKE :search3 OR u.email LIKE :search4)';
+        $searchTerm = '%' . $filters['search'] . '%';
+        $params['search1'] = $searchTerm;
+        $params['search2'] = $searchTerm;
+        $params['search3'] = $searchTerm;
+        $params['search4'] = $searchTerm;
     }
 
     if (!empty($filters['status']) && in_array($filters['status'], staff_statuses(), true)) {
@@ -1416,6 +1825,26 @@ function get_lecturer(int $lecturerId): ?array
  */
 function create_lecturer(array $data): int
 {
+    $staffNo = trim((string) ($data['staff_no'] ?? ''));
+    $firstName = trim((string) ($data['first_name'] ?? ''));
+    $lastName = trim((string) ($data['last_name'] ?? ''));
+    $phone = trim((string) ($data['phone'] ?? ''));
+    $department = trim((string) ($data['department'] ?? ''));
+    $accountStatus = (string) ($data['account_status'] ?? 'ACTIVE');
+    $profileStatus = (string) ($data['status'] ?? 'ACTIVE');
+
+    if ($staffNo === '' || $firstName === '' || $lastName === '') {
+        throw new InvalidArgumentException('Staff number, first name, and last name are required for a lecturer profile.');
+    }
+
+    if (!in_array($accountStatus, user_statuses(), true)) {
+        throw new InvalidArgumentException('Invalid account status selected.');
+    }
+
+    if (!in_array($profileStatus, staff_statuses(), true)) {
+        throw new InvalidArgumentException('Invalid lecturer profile status selected.');
+    }
+
     if (username_exists($data['username'])) {
         throw new InvalidArgumentException('Username is already in use.');
     }
@@ -1424,12 +1853,16 @@ function create_lecturer(array $data): int
         throw new InvalidArgumentException('Email is already in use.');
     }
 
-    if (staff_no_exists('lecturers', $data['staff_no'])) {
+    if (staff_no_exists('lecturers', $staffNo)) {
         throw new InvalidArgumentException('Staff number is already in use.');
     }
 
     $pdo = db();
-    $pdo->beginTransaction();
+    $started = false;
+    if (!$pdo->inTransaction()) {
+        $pdo->beginTransaction();
+        $started = true;
+    }
 
     try {
         $userStatement = $pdo->prepare(
@@ -1440,7 +1873,7 @@ function create_lecturer(array $data): int
             'username' => $data['username'],
             'email' => $data['email'],
             'password_hash' => password_hash($data['password'], PASSWORD_DEFAULT),
-            'status' => $data['account_status'],
+            'status' => $accountStatus,
         ]);
 
         $userId = (int) $pdo->lastInsertId();
@@ -1451,20 +1884,27 @@ function create_lecturer(array $data): int
         );
         $lecturerStatement->execute([
             'user_id' => $userId,
-            'staff_no' => $data['staff_no'],
-            'first_name' => $data['first_name'],
-            'last_name' => $data['last_name'],
-            'phone' => $data['phone'] ?: null,
-            'department' => $data['department'] ?: null,
-            'status' => $data['status'],
+            'staff_no' => $staffNo,
+            'first_name' => $firstName,
+            'last_name' => $lastName,
+            'phone' => $phone !== '' ? $phone : null,
+            'department' => $department !== '' ? $department : null,
+            'status' => $profileStatus,
         ]);
 
         $lecturerId = (int) $pdo->lastInsertId();
-        $pdo->commit();
+        if ($started) {
+            $pdo->commit();
+        }
 
         return $lecturerId;
     } catch (Throwable $exception) {
-        $pdo->rollBack();
+        if ($started && $pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        if (is_integrity_constraint_violation($exception)) {
+            throw new InvalidArgumentException('Unable to create lecturer: username, email, or staff number may already be in use.');
+        }
         throw $exception;
     }
 }
@@ -1551,8 +1991,12 @@ function list_academic_staff(array $filters = []): array
     $params = [];
 
     if (!empty($filters['search'])) {
-        $sql .= ' AND (a.staff_no LIKE :search OR a.first_name LIKE :search OR a.last_name LIKE :search OR u.email LIKE :search)';
-        $params['search'] = '%' . $filters['search'] . '%';
+        $sql .= ' AND (a.staff_no LIKE :search1 OR a.first_name LIKE :search2 OR a.last_name LIKE :search3 OR u.email LIKE :search4)';
+        $searchTerm = '%' . $filters['search'] . '%';
+        $params['search1'] = $searchTerm;
+        $params['search2'] = $searchTerm;
+        $params['search3'] = $searchTerm;
+        $params['search4'] = $searchTerm;
     }
 
     if (!empty($filters['status']) && in_array($filters['status'], staff_statuses(), true)) {
@@ -1592,6 +2036,26 @@ function get_academic_staff_member(int $staffId): ?array
  */
 function create_academic_staff_member(array $data): int
 {
+    $staffNo = trim((string) ($data['staff_no'] ?? ''));
+    $firstName = trim((string) ($data['first_name'] ?? ''));
+    $lastName = trim((string) ($data['last_name'] ?? ''));
+    $phone = trim((string) ($data['phone'] ?? ''));
+    $position = trim((string) ($data['position'] ?? ''));
+    $accountStatus = (string) ($data['account_status'] ?? 'ACTIVE');
+    $profileStatus = (string) ($data['status'] ?? 'ACTIVE');
+
+    if ($staffNo === '' || $firstName === '' || $lastName === '') {
+        throw new InvalidArgumentException('Staff number, first name, and last name are required for an academic staff profile.');
+    }
+
+    if (!in_array($accountStatus, user_statuses(), true)) {
+        throw new InvalidArgumentException('Invalid account status selected.');
+    }
+
+    if (!in_array($profileStatus, staff_statuses(), true)) {
+        throw new InvalidArgumentException('Invalid academic staff profile status selected.');
+    }
+
     if (username_exists($data['username'])) {
         throw new InvalidArgumentException('Username is already in use.');
     }
@@ -1600,12 +2064,16 @@ function create_academic_staff_member(array $data): int
         throw new InvalidArgumentException('Email is already in use.');
     }
 
-    if (staff_no_exists('academic_staff', $data['staff_no'])) {
+    if (staff_no_exists('academic_staff', $staffNo)) {
         throw new InvalidArgumentException('Staff number is already in use.');
     }
 
     $pdo = db();
-    $pdo->beginTransaction();
+    $started = false;
+    if (!$pdo->inTransaction()) {
+        $pdo->beginTransaction();
+        $started = true;
+    }
 
     try {
         $userStatement = $pdo->prepare(
@@ -1616,7 +2084,7 @@ function create_academic_staff_member(array $data): int
             'username' => $data['username'],
             'email' => $data['email'],
             'password_hash' => password_hash($data['password'], PASSWORD_DEFAULT),
-            'status' => $data['account_status'],
+            'status' => $accountStatus,
         ]);
 
         $userId = (int) $pdo->lastInsertId();
@@ -1627,20 +2095,27 @@ function create_academic_staff_member(array $data): int
         );
         $staffStatement->execute([
             'user_id' => $userId,
-            'staff_no' => $data['staff_no'],
-            'first_name' => $data['first_name'],
-            'last_name' => $data['last_name'],
-            'phone' => $data['phone'] ?: null,
-            'position' => $data['position'] ?: null,
-            'status' => $data['status'],
+            'staff_no' => $staffNo,
+            'first_name' => $firstName,
+            'last_name' => $lastName,
+            'phone' => $phone !== '' ? $phone : null,
+            'position' => $position !== '' ? $position : null,
+            'status' => $profileStatus,
         ]);
 
         $staffId = (int) $pdo->lastInsertId();
-        $pdo->commit();
+        if ($started) {
+            $pdo->commit();
+        }
 
         return $staffId;
     } catch (Throwable $exception) {
-        $pdo->rollBack();
+        if ($started && $pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        if (is_integrity_constraint_violation($exception)) {
+            throw new InvalidArgumentException('Unable to create academic staff: username, email, or staff number may already be in use.');
+        }
         throw $exception;
     }
 }

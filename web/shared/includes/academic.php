@@ -990,6 +990,47 @@ function save_course_module_selection(int $courseId, array $selectedModuleIds): 
 }
 
 /**
+ * Atomically create a course and assign optional catalogue modules.
+ * Reuses create_course() + save_course_module_selection(); rolls back on any failure.
+ *
+ * @param array{course_code?: mixed, course_name?: mixed, duration_years?: mixed, status?: mixed} $data
+ * @param list<mixed> $moduleIds
+ * @return array{course_id: int, module_count: int}
+ */
+function create_course_with_modules(array $data, array $moduleIds = []): array
+{
+    $pdo = db();
+    $started = false;
+    if (!$pdo->inTransaction()) {
+        $pdo->beginTransaction();
+        $started = true;
+    }
+
+    try {
+        $courseId = create_course($data);
+        if ($moduleIds !== []) {
+            save_course_module_selection($courseId, $moduleIds);
+        }
+
+        $moduleCount = count(list_active_course_modules($courseId));
+
+        if ($started) {
+            $pdo->commit();
+        }
+
+        return [
+            'course_id' => $courseId,
+            'module_count' => $moduleCount,
+        ];
+    } catch (Throwable $exception) {
+        if ($started && $pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        throw $exception;
+    }
+}
+
+/**
  * @param array{search?: string, course_id?: int, status?: string, course_module_status?: string} $filters
  * @return list<array<string, mixed>>
  */

@@ -91,6 +91,7 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
                                 <div class="app-actions">
                                     <a href="<?= e(app_url($academicRoutePrefix . '/courses/view.php?id=' . $course['course_id'])) ?>" class="btn btn-sm btn-outline-secondary">View</a>
                                     <a href="<?= e(app_url($academicRoutePrefix . '/courses/edit.php?id=' . $course['course_id'])) ?>" class="btn btn-sm btn-outline-primary">Edit</a>
+                                    <a href="<?= e(app_url($academicRoutePrefix . '/courses/modules.php?id=' . $course['course_id'])) ?>" class="btn btn-sm btn-outline-primary">Modules</a>
                                 </div>
                             </td>
                         </tr>

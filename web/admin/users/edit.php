@@ -38,7 +38,6 @@ if (!in_array((string) $accountUser['role'], user_management_roles(), true)) {
 }
 
 $pageTitle = 'Edit User';
-$managementRoles = user_management_roles();
 $errors = [];
 $form = [
     'user_id' => (string) $userId,
@@ -98,6 +97,18 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
     <a href="<?= e(app_url('admin/users/index.php')) ?>" class="btn btn-outline-secondary btn-sm">Back to Users</a>
 </div>
 
+<?php if (user_needs_lecturer_profile($accountUser)): ?>
+    <div class="alert alert-warning">
+        This Lecturer login has no Lecturer Management profile.
+        <a href="<?= e(app_url('admin/users/complete-lecturer-profile.php?id=' . $userId)) ?>" class="alert-link">Complete Lecturer Profile</a>
+    </div>
+<?php elseif (user_needs_academic_staff_profile($accountUser)): ?>
+    <div class="alert alert-warning">
+        This Academic Staff login has no Academic Staff Management profile.
+        <a href="<?= e(app_url('admin/users/complete-staff-profile.php?id=' . $userId)) ?>" class="alert-link">Complete Staff Profile</a>
+    </div>
+<?php endif; ?>
+
 <?php if ($errors !== []): ?>
     <div class="alert alert-danger">
         <ul class="mb-0">
@@ -137,11 +148,11 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
             <div class="row g-3">
                 <div class="col-md-3">
                     <label for="role" class="form-label">Role</label>
-                    <select class="form-select" id="role" name="role">
-                        <?php foreach ($managementRoles as $authRole): ?>
-                            <option value="<?= e($authRole) ?>" <?= $form['role'] === $authRole ? 'selected' : '' ?>><?= e(role_label($authRole)) ?></option>
-                        <?php endforeach; ?>
-                    </select>
+                    <input type="text" class="form-control" id="role_display" value="<?= e(role_label($form['role'])) ?>" readonly>
+                    <input type="hidden" name="role" value="<?= e($form['role']) ?>">
+                    <p class="text-muted small mt-1 mb-0">
+                        Role cannot be changed here. Lecturer and Academic Staff accounts are tied to management profiles.
+                    </p>
                 </div>
                 <div class="col-md-3">
                     <label for="status" class="form-label">Status</label>

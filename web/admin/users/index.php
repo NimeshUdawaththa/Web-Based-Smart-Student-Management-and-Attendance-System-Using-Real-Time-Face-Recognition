@@ -119,6 +119,11 @@ require INCLUDES_PATH . '/dashboard-layout-start.php';
                             <td class="text-end">
                                 <div class="app-actions">
                                     <a href="<?= e(app_url('admin/users/edit.php?id=' . $listedUser['user_id'])) ?>" class="btn btn-sm btn-outline-primary">Edit</a>
+                                    <?php if (user_needs_lecturer_profile($listedUser)): ?>
+                                        <a href="<?= e(app_url('admin/users/complete-lecturer-profile.php?id=' . $listedUser['user_id'])) ?>" class="btn btn-sm btn-outline-primary">Complete Lecturer Profile</a>
+                                    <?php elseif (user_needs_academic_staff_profile($listedUser)): ?>
+                                        <a href="<?= e(app_url('admin/users/complete-staff-profile.php?id=' . $listedUser['user_id'])) ?>" class="btn btn-sm btn-outline-primary">Complete Staff Profile</a>
+                                    <?php endif; ?>
                                     <?php if ($listedUser['status'] === 'ACTIVE'): ?>
                                         <form method="post" class="d-inline">
                                             <?= csrf_field() ?>
