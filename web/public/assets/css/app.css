@@ -1672,6 +1672,13 @@ a.lecturer-cal-event--type-lecture {
     margin-right: auto;
 }
 
+.app-auth__card-flash {
+    font-size: 0.875rem;
+    padding: 0.625rem 0.875rem;
+    margin-bottom: 0;
+    border-radius: 0.5rem;
+}
+
 .app-auth {
     flex: 1 1 auto;
     display: grid;

@@ -13,7 +13,8 @@ $user = current_user();
 $homeUrl = $user !== null
     ? app_url(role_dashboard_path($user['role']))
     : app_url('login.php');
-$flash = get_flash();
+$authFlashInCard = !empty($authFlashInCard);
+$flash = $authFlashInCard ? null : get_flash();
 ?>
 <!DOCTYPE html>
 <html lang="en">

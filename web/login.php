@@ -47,6 +47,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
 
 $pageTitle = 'Sign in';
 $authPage = true;
+$authFlashInCard = true;
 require INCLUDES_PATH . '/header.php';
 ?>
 
@@ -67,8 +68,22 @@ require INCLUDES_PATH . '/header.php';
     <div class="app-auth__panel app-auth__panel--form">
         <div class="app-auth__card card border-0">
             <div class="card-body">
+                <?php $loginFlash = get_flash(); ?>
                 <h2 class="app-auth__card-title mb-1">Welcome back</h2>
-                <p class="text-muted mb-4">Sign in with your username or email address.</p>
+                <p class="text-muted <?= $loginFlash !== null ? 'mb-3' : 'mb-4' ?>">Sign in with your username or email address.</p>
+
+                <?php if ($loginFlash !== null): ?>
+                    <?php
+                    $loginFlashClass = match ($loginFlash['type']) {
+                        'success' => 'alert-success',
+                        'error' => 'alert-danger',
+                        default => 'alert-info',
+                    };
+                    ?>
+                    <div class="alert <?= e($loginFlashClass) ?> app-auth__card-flash mb-3" role="alert">
+                        <?= e($loginFlash['message']) ?>
+                    </div>
+                <?php endif; ?>
 
                 <form method="post" action="<?= e(app_url('login.php')) ?>" novalidate>
                     <?= csrf_field() ?>
