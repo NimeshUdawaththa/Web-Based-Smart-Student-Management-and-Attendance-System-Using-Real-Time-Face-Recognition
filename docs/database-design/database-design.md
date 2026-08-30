@@ -99,12 +99,20 @@ Application code should keep `users.role` consistent with the matching profile t
 
 ### 7. `modules`
 
-A teachable subject belonging to a course.
+Independent Module Catalogue. A teachable subject is created once and may be linked to many courses.
 
 - **Primary key:** `module_id`
-- **Foreign keys:** `course_id` → `courses.course_id`
-- **Unique:** `(course_id, module_code)`
-- **Notes:** `credits` is `DECIMAL(4,1)` to allow values such as `1.5`.
+- **Unique:** `module_code` globally
+- **Notes:** `credits` is `DECIMAL(4,1)` to allow values such as `1.5`. Credits and semester stay on the catalogue row.
+
+### 7b. `course_modules`
+
+Which catalogue modules a course currently uses.
+
+- **Primary key:** `course_module_id`
+- **Foreign keys:** `course_id` → `courses.course_id`, `module_id` → `modules.module_id`
+- **Unique:** `(course_id, module_id)`
+- **Notes:** `status` `INACTIVE` means unassigned going forward. Rows are never hard-deleted.
 
 ### 8. `student_modules`
 
@@ -176,32 +184,38 @@ Processed attendance decision for one student in one session.
 
 ### 15. `assignments`
 
-Coursework set by a lecturer on a module.
+Coursework & Assessments parent (Assignment / Presentation / Exam / Practical).
 
 - **Primary key:** `assignment_id`
 - **Foreign keys:** `module_id` → `modules.module_id`, `lecturer_id` → `lecturers.lecturer_id`
-- **Notes:** `file_path` is an optional uploaded brief. `max_marks` is `DECIMAL(8,2)`.
+- **activity_type:** `ASSIGNMENT` | `PRESENTATION` | `EXAM` | `PRACTICAL` (default `ASSIGNMENT`)
+- **due_date:** Assignment submission deadline. For Presentation/Exam/Practical, stored as the scheduled end datetime for NOT NULL compatibility — UI shows schedule fields, not a misleading Due label for those types.
+- **scheduled_date / start_time / end_time / room:** Required for Presentation / Exam / Practical (room optional). NULL for Assignment.
+- **Notes:** `file_path` is an optional uploaded brief for Assignment/Presentation. `max_marks` is `DECIMAL(8,2)`. Not stored as `lecture_sessions`.
 
 ### 16. `assignment_submissions`
 
-Student work against an assignment.
+Student file work against Assignment/Presentation only.
 
 - **Primary key:** `submission_id`
 - **Foreign keys:** `assignment_id` → `assignments.assignment_id`, `student_id` → `students.student_id`
 - **Unique:** `(assignment_id, student_id)` — one submission row per student per assignment
-- **Notes:** A later resubmission should update this row. `grade` is nullable until marked.
+- **Notes:** A later resubmission should update this row. `grade` is nullable until marked. `file_path` is required.
 
-### 17. `marks`
+### 16b. `assignment_results`
 
-Recorded assessment results for a student on a module.
+Direct lecturer-entered marks for Exam/Practical. No row = Not Recorded.
 
-- **Primary key:** `mark_id`
-- **Foreign keys:**
-  - `student_id` → `students.student_id`
-  - `module_id` → `modules.module_id`
-  - `recorded_by` → `lecturers.lecturer_id`
-- **Check:** `0 <= marks_obtained <= max_marks` and `max_marks > 0`
-- **Notes:** `assessment_type` is a string (assignment, quiz, exam, and similar) so new types can be added without a schema change.
+- **Primary key:** `result_id`
+- **Unique:** `(assignment_id, student_id)`
+- **Foreign keys:** assignment, student, recorded_by → lecturers (RESTRICT deletes)
+
+### 17. `marks` (legacy / inactive)
+
+Historical module assessment ledger. **Not used by active UI.**
+
+- Active grading: `assignment_submissions` (Assignment/Presentation) and `assignment_results` (Exam/Practical)
+- Keep the table and rows for recovery/history; do not drop
 
 ### 18. `announcements`
 
@@ -230,13 +244,16 @@ Activity history for security and traceability.
 | `students` | `user_id`, `registration_no` | One profile and one registration number per student |
 | `lecturers` | `user_id`, `staff_no` | One profile and one staff number per lecturer |
 | `academic_staff` | `user_id`, `staff_no` | One profile and one staff number per academic staff member |
-| `modules` | `(course_id, module_code)` | Unique module code inside a course |
+| `modules` | `module_code` | Unique catalogue module code |
+| `course_modules` | `(course_id, module_id)` | A course can use a catalogue module only once |
+| `batch_modules` | `(batch_id, module_id)` | A batch can take a module only once |
 | `student_modules` | `(student_id, module_id)` | No duplicate enrolment |
 | `module_lecturers` | `(module_id, lecturer_id)` | No duplicate teaching assignment |
 | `lecture_sessions` | `(module_id, batch_id, session_date, scheduled_start)` | No duplicate session occurrence |
 | `face_profiles` | `student_id` | One face profile per student |
 | `attendance_records` | `(student_id, session_id)` | One processed attendance result per session |
 | `assignment_submissions` | `(assignment_id, student_id)` | One submission record per assignment |
+| `assignment_results` | `(assignment_id, student_id)` | One direct result per student per Exam/Practical |
 
 ## Major relationships
 
@@ -250,7 +267,8 @@ erDiagram
 
   courses ||--o{ batches : contains
   courses ||--o{ students : enrols
-  courses ||--o{ modules : contains
+  courses ||--o{ course_modules : selects
+  modules ||--o{ course_modules : offered_as
 
   batches ||--o{ students : groups
   batches ||--o{ schedules : timetabled_for
@@ -287,9 +305,9 @@ erDiagram
 Relationship summary:
 
 - One `users` row is the login for at most one student, lecturer, or academic staff profile.
-- A `course` has many `batches` and many `modules`.
+- A `course` has many `batches`. Catalogue `modules` are linked through `course_modules`.
 - A `student` belongs to one `course` and one `batch`, and that pair must match.
-- A `module` can have many lecturers and many enrolled students.
+- A catalogue `module` can belong to many courses and can have many lecturers and enrolled students.
 - A `schedule` is recurring; a `lecture_session` is one dated occurrence.
 - A `student` has at most one `face_profiles` row.
 - A `lecture_session` has many raw `attendance_events` and at most one `attendance_records` row per student.

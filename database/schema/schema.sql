@@ -172,11 +172,10 @@ CREATE TABLE academic_staff (
 
 -- -----------------------------------------------------------------------------
 -- 7. modules
--- Modules/subjects belonging to a course.
+-- Independent Module Catalogue. A module may be linked to many courses.
 -- -----------------------------------------------------------------------------
 CREATE TABLE modules (
   module_id INT UNSIGNED NOT NULL AUTO_INCREMENT,
-  course_id INT UNSIGNED NOT NULL,
   module_code VARCHAR(20) NOT NULL,
   module_name VARCHAR(150) NOT NULL,
   credits DECIMAL(4,1) NOT NULL,
@@ -185,12 +184,31 @@ CREATE TABLE modules (
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (module_id),
-  UNIQUE KEY uq_modules_course_code (course_id, module_code),
-  KEY idx_modules_semester (course_id, semester),
+  UNIQUE KEY uq_modules_code (module_code),
+  KEY idx_modules_semester (semester),
   CONSTRAINT chk_modules_credits CHECK (credits > 0),
-  CONSTRAINT chk_modules_semester CHECK (semester > 0),
-  CONSTRAINT fk_modules_course
+  CONSTRAINT chk_modules_semester CHECK (semester > 0)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- -----------------------------------------------------------------------------
+-- 7b. course_modules
+-- Which catalogue modules a course currently uses. Rows are never hard-deleted.
+-- -----------------------------------------------------------------------------
+CREATE TABLE course_modules (
+  course_module_id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  course_id INT UNSIGNED NOT NULL,
+  module_id INT UNSIGNED NOT NULL,
+  status ENUM('ACTIVE', 'INACTIVE') NOT NULL DEFAULT 'ACTIVE',
+  assigned_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (course_module_id),
+  UNIQUE KEY uq_course_modules_course_module (course_id, module_id),
+  KEY idx_course_modules_module (module_id),
+  CONSTRAINT fk_course_modules_course
     FOREIGN KEY (course_id) REFERENCES courses (course_id)
+    ON DELETE RESTRICT
+    ON UPDATE CASCADE,
+  CONSTRAINT fk_course_modules_module
+    FOREIGN KEY (module_id) REFERENCES modules (module_id)
     ON DELETE RESTRICT
     ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -213,6 +231,30 @@ CREATE TABLE student_modules (
     ON DELETE RESTRICT
     ON UPDATE CASCADE,
   CONSTRAINT fk_student_modules_module
+    FOREIGN KEY (module_id) REFERENCES modules (module_id)
+    ON DELETE RESTRICT
+    ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- -----------------------------------------------------------------------------
+-- 8b. batch_modules
+-- Which modules a batch currently takes. Subset of ACTIVE course_modules for the batch's course.
+-- status INACTIVE means unassigned going forward; rows are never hard-deleted.
+-- -----------------------------------------------------------------------------
+CREATE TABLE batch_modules (
+  batch_module_id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  batch_id INT UNSIGNED NOT NULL,
+  module_id INT UNSIGNED NOT NULL,
+  status ENUM('ACTIVE', 'INACTIVE') NOT NULL DEFAULT 'ACTIVE',
+  assigned_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (batch_module_id),
+  UNIQUE KEY uq_batch_modules_batch_module (batch_id, module_id),
+  KEY idx_batch_modules_module (module_id),
+  CONSTRAINT fk_batch_modules_batch
+    FOREIGN KEY (batch_id) REFERENCES batches (batch_id)
+    ON DELETE RESTRICT
+    ON UPDATE CASCADE,
+  CONSTRAINT fk_batch_modules_module
     FOREIGN KEY (module_id) REFERENCES modules (module_id)
     ON DELETE RESTRICT
     ON UPDATE CASCADE
@@ -252,6 +294,8 @@ CREATE TABLE schedules (
   day_of_week ENUM('MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY') NOT NULL,
   start_time TIME NOT NULL,
   end_time TIME NOT NULL,
+  break_start TIME DEFAULT NULL,
+  break_end TIME DEFAULT NULL,
   room VARCHAR(50) DEFAULT NULL,
   status ENUM('ACTIVE', 'INACTIVE') NOT NULL DEFAULT 'ACTIVE',
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -261,6 +305,15 @@ CREATE TABLE schedules (
   KEY idx_schedules_lecturer_day (lecturer_id, day_of_week, start_time),
   KEY idx_schedules_module (module_id),
   CONSTRAINT chk_schedules_time CHECK (end_time > start_time),
+  CONSTRAINT chk_schedules_break CHECK (
+    (break_start IS NULL AND break_end IS NULL)
+    OR (
+      break_start IS NOT NULL AND break_end IS NOT NULL
+      AND break_start >= start_time
+      AND break_end <= end_time
+      AND break_end > break_start
+    )
+  ),
   CONSTRAINT fk_schedules_module
     FOREIGN KEY (module_id) REFERENCES modules (module_id)
     ON DELETE RESTRICT
@@ -289,6 +342,8 @@ CREATE TABLE lecture_sessions (
   session_date DATE NOT NULL,
   scheduled_start TIME NOT NULL,
   scheduled_end TIME NOT NULL,
+  break_start TIME DEFAULT NULL,
+  break_end TIME DEFAULT NULL,
   actual_start DATETIME DEFAULT NULL,
   actual_end DATETIME DEFAULT NULL,
   room VARCHAR(50) DEFAULT NULL,
@@ -303,6 +358,15 @@ CREATE TABLE lecture_sessions (
   KEY idx_lecture_sessions_lecturer_date (lecturer_id, session_date),
   KEY idx_lecture_sessions_schedule (schedule_id),
   CONSTRAINT chk_lecture_sessions_scheduled_time CHECK (scheduled_end > scheduled_start),
+  CONSTRAINT chk_lecture_sessions_break CHECK (
+    (break_start IS NULL AND break_end IS NULL)
+    OR (
+      break_start IS NOT NULL AND break_end IS NOT NULL
+      AND break_start >= scheduled_start
+      AND break_end <= scheduled_end
+      AND break_end > break_start
+    )
+  ),
   CONSTRAINT chk_lecture_sessions_actual_time CHECK (
     actual_start IS NULL OR actual_end IS NULL OR actual_end >= actual_start
   ),
@@ -374,6 +438,44 @@ CREATE TABLE attendance_events (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- -----------------------------------------------------------------------------
+-- 13b. attendance_early_pending
+-- Door-camera early arrival state. Not an official attendance audit event.
+-- Promoted to attendance_events.IN at scheduled start if still inside.
+-- -----------------------------------------------------------------------------
+CREATE TABLE attendance_early_pending (
+  pending_id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  student_id INT UNSIGNED NOT NULL,
+  session_id INT UNSIGNED NOT NULL,
+  inside TINYINT(1) NOT NULL DEFAULT 0,
+  early_entry_time DATETIME DEFAULT NULL,
+  last_direction ENUM('ENTRY', 'EXIT') NOT NULL,
+  last_seen_at DATETIME NOT NULL,
+  confidence DECIMAL(5,2) DEFAULT NULL,
+  camera_id VARCHAR(50) DEFAULT NULL,
+  status ENUM('OPEN', 'PROMOTED', 'CANCELLED') NOT NULL DEFAULT 'OPEN',
+  promoted_event_id INT UNSIGNED DEFAULT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (pending_id),
+  UNIQUE KEY uq_early_pending_student_session (student_id, session_id),
+  KEY idx_early_pending_session_status_inside (session_id, status, inside),
+  CONSTRAINT chk_early_pending_inside CHECK (inside IN (0, 1)),
+  CONSTRAINT chk_early_pending_confidence CHECK (confidence IS NULL OR (confidence >= 0 AND confidence <= 100)),
+  CONSTRAINT fk_early_pending_student
+    FOREIGN KEY (student_id) REFERENCES students (student_id)
+    ON DELETE RESTRICT
+    ON UPDATE CASCADE,
+  CONSTRAINT fk_early_pending_session
+    FOREIGN KEY (session_id) REFERENCES lecture_sessions (session_id)
+    ON DELETE RESTRICT
+    ON UPDATE CASCADE,
+  CONSTRAINT fk_early_pending_event
+    FOREIGN KEY (promoted_event_id) REFERENCES attendance_events (event_id)
+    ON DELETE RESTRICT
+    ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- -----------------------------------------------------------------------------
 -- 14. attendance_records
 -- Processed attendance result: one row per student per lecture session.
 -- left_early is independent of PRESENT/LATE/ABSENT so a student can be late
@@ -386,9 +488,12 @@ CREATE TABLE attendance_records (
   first_entry DATETIME DEFAULT NULL,
   last_exit DATETIME DEFAULT NULL,
   total_present_minutes INT UNSIGNED NOT NULL DEFAULT 0,
+  teaching_minutes INT UNSIGNED NOT NULL DEFAULT 0,
+  attendance_percent DECIMAL(5,2) NOT NULL DEFAULT 0.00,
   status ENUM('PRESENT', 'LATE', 'ABSENT') NOT NULL DEFAULT 'ABSENT',
   late_minutes INT UNSIGNED NOT NULL DEFAULT 0,
   left_early TINYINT(1) NOT NULL DEFAULT 0,
+  finalized_at DATETIME DEFAULT NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (attendance_id),
@@ -410,6 +515,9 @@ CREATE TABLE attendance_records (
 
 -- -----------------------------------------------------------------------------
 -- 15. assignments
+-- Coursework & Assessments parent (Assignment / Presentation / Exam / Practical).
+-- due_date remains the submission deadline for file-based activities.
+-- scheduled_* is for Exam/Practical sittings (not lecture_sessions).
 -- -----------------------------------------------------------------------------
 CREATE TABLE assignments (
   assignment_id INT UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -418,7 +526,12 @@ CREATE TABLE assignments (
   title VARCHAR(200) NOT NULL,
   description TEXT DEFAULT NULL,
   file_path VARCHAR(255) DEFAULT NULL,
+  activity_type ENUM('ASSIGNMENT', 'PRESENTATION', 'EXAM', 'PRACTICAL') NOT NULL DEFAULT 'ASSIGNMENT',
   due_date DATETIME NOT NULL,
+  scheduled_date DATE DEFAULT NULL,
+  start_time TIME DEFAULT NULL,
+  end_time TIME DEFAULT NULL,
+  room VARCHAR(150) DEFAULT NULL,
   max_marks DECIMAL(8,2) NOT NULL,
   status ENUM('DRAFT', 'PUBLISHED', 'CLOSED') NOT NULL DEFAULT 'DRAFT',
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -426,7 +539,17 @@ CREATE TABLE assignments (
   PRIMARY KEY (assignment_id),
   KEY idx_assignments_module_due (module_id, due_date),
   KEY idx_assignments_lecturer (lecturer_id),
+  KEY idx_assignments_activity_schedule (activity_type, scheduled_date),
   CONSTRAINT chk_assignments_max_marks CHECK (max_marks > 0),
+  CONSTRAINT chk_assignments_schedule CHECK (
+    (scheduled_date IS NULL AND start_time IS NULL AND end_time IS NULL)
+    OR (
+      scheduled_date IS NOT NULL
+      AND start_time IS NOT NULL
+      AND end_time IS NOT NULL
+      AND end_time > start_time
+    )
+  ),
   CONSTRAINT fk_assignments_module
     FOREIGN KEY (module_id) REFERENCES modules (module_id)
     ON DELETE RESTRICT
@@ -439,6 +562,7 @@ CREATE TABLE assignments (
 
 -- -----------------------------------------------------------------------------
 -- 16. assignment_submissions
+-- File submissions for ASSIGNMENT / PRESENTATION only.
 -- One submission record per student per assignment in this initial design.
 -- Resubmission should update this row rather than insert a second row.
 -- -----------------------------------------------------------------------------
@@ -466,8 +590,42 @@ CREATE TABLE assignment_submissions (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- -----------------------------------------------------------------------------
--- 17. marks
--- Module assessment results. recorded_by references lecturers, not users.
+-- 16b. assignment_results
+-- Direct lecturer-entered results for EXAM / PRACTICAL only.
+-- No row = Not Recorded. Never invent zero. Not used for file coursework.
+-- -----------------------------------------------------------------------------
+CREATE TABLE assignment_results (
+  result_id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  assignment_id INT UNSIGNED NOT NULL,
+  student_id INT UNSIGNED NOT NULL,
+  marks_obtained DECIMAL(8,2) NOT NULL,
+  remarks TEXT DEFAULT NULL,
+  recorded_by INT UNSIGNED NOT NULL,
+  recorded_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (result_id),
+  UNIQUE KEY uq_assignment_results_assignment_student (assignment_id, student_id),
+  KEY idx_assignment_results_student (student_id),
+  KEY idx_assignment_results_recorded_by (recorded_by),
+  CONSTRAINT chk_assignment_results_marks_nonneg CHECK (marks_obtained >= 0),
+  CONSTRAINT fk_assignment_results_assignment
+    FOREIGN KEY (assignment_id) REFERENCES assignments (assignment_id)
+    ON DELETE RESTRICT
+    ON UPDATE CASCADE,
+  CONSTRAINT fk_assignment_results_student
+    FOREIGN KEY (student_id) REFERENCES students (student_id)
+    ON DELETE RESTRICT
+    ON UPDATE CASCADE,
+  CONSTRAINT fk_assignment_results_recorded_by
+    FOREIGN KEY (recorded_by) REFERENCES lecturers (lecturer_id)
+    ON DELETE RESTRICT
+    ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- -----------------------------------------------------------------------------
+-- 17. marks (LEGACY — inactive UI; retained for recovery/history only)
+-- Active grading is assignment_submissions (Assignment/Presentation) and
+-- assignment_results (Exam/Practical). Do not drop this table or its rows.
 -- -----------------------------------------------------------------------------
 CREATE TABLE marks (
   mark_id INT UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -503,6 +661,8 @@ CREATE TABLE marks (
 
 -- -----------------------------------------------------------------------------
 -- 18. announcements
+-- target_role is a deprecated v1 compatibility snapshot (NOT NULL leftover).
+-- Source of truth for audiences is announcement_targets.
 -- -----------------------------------------------------------------------------
 CREATE TABLE announcements (
   announcement_id INT UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -522,6 +682,69 @@ CREATE TABLE announcements (
   CONSTRAINT fk_announcements_created_by
     FOREIGN KEY (created_by) REFERENCES users (user_id)
     ON DELETE RESTRICT
+    ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- -----------------------------------------------------------------------------
+-- 18b. announcement_targets
+-- One row per individual audience role. ALL is not stored; it expands to four rows.
+-- -----------------------------------------------------------------------------
+CREATE TABLE announcement_targets (
+  announcement_target_id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  announcement_id INT UNSIGNED NOT NULL,
+  target_role ENUM('ADMIN', 'ACADEMIC_STAFF', 'LECTURER', 'STUDENT') NOT NULL,
+  PRIMARY KEY (announcement_target_id),
+  UNIQUE KEY uq_announcement_targets_announcement_role (announcement_id, target_role),
+  KEY idx_announcement_targets_role (target_role),
+  CONSTRAINT fk_announcement_targets_announcement
+    FOREIGN KEY (announcement_id) REFERENCES announcements (announcement_id)
+    ON DELETE CASCADE
+    ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- -----------------------------------------------------------------------------
+-- 18c. campus_events
+-- One-off campus/academic events (workshops, seminars, orientation, etc.).
+-- Not lecture timetable sessions and not attendance IN/OUT events.
+-- -----------------------------------------------------------------------------
+CREATE TABLE campus_events (
+  campus_event_id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  title VARCHAR(200) NOT NULL,
+  description TEXT DEFAULT NULL,
+  start_datetime DATETIME NOT NULL,
+  end_datetime DATETIME NOT NULL,
+  location VARCHAR(150) DEFAULT NULL,
+  poster_path VARCHAR(255) DEFAULT NULL,
+  created_by INT UNSIGNED NOT NULL,
+  status ENUM('DRAFT', 'PUBLISHED', 'CANCELLED') NOT NULL DEFAULT 'DRAFT',
+  published_at DATETIME DEFAULT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (campus_event_id),
+  KEY idx_campus_events_status_start (status, start_datetime),
+  KEY idx_campus_events_published_at (published_at),
+  KEY idx_campus_events_created_by (created_by),
+  CONSTRAINT chk_campus_events_time CHECK (end_datetime > start_datetime),
+  CONSTRAINT fk_campus_events_created_by
+    FOREIGN KEY (created_by) REFERENCES users (user_id)
+    ON DELETE RESTRICT
+    ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- -----------------------------------------------------------------------------
+-- 18d. campus_event_targets
+-- One row per individual audience role. ALL is not stored.
+-- -----------------------------------------------------------------------------
+CREATE TABLE campus_event_targets (
+  campus_event_target_id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  campus_event_id INT UNSIGNED NOT NULL,
+  target_role ENUM('ADMIN', 'ACADEMIC_STAFF', 'LECTURER', 'STUDENT') NOT NULL,
+  PRIMARY KEY (campus_event_target_id),
+  UNIQUE KEY uq_campus_event_targets_event_role (campus_event_id, target_role),
+  KEY idx_campus_event_targets_role (target_role),
+  CONSTRAINT fk_campus_event_targets_event
+    FOREIGN KEY (campus_event_id) REFERENCES campus_events (campus_event_id)
+    ON DELETE CASCADE
     ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
